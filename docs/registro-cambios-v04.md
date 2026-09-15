@@ -9,16 +9,16 @@
 
 | ID | Fecha | Bloque | Archivos | Cambio código (resumen) | Impacto en Definición v04 (qué editar) | Estado | Verificado |
 |----|-------|--------|----------|-------------------------|----------------------------------------|--------|------------|
-| C01 | 2026-09-15 | B1 §5.5 separación operación vs simulación | `app/page.tsx` | `ScenarioSelect` dividido en 5.5.1 operación (siempre activa) y 5.5.2 simulaciones (solo 5D/colapso); `simLabels`, `stateLabels` neutros, `Header` distingue día a día; botón `Iniciar simulación` deshabilitado en `day` | Reescribir §5.5 (ver detalle abajo), reemplazar Fig 3-botones por Fig 5.5-A y 5.5-B, actualizar pie p.13 | Implementado, sin commit | `npm run build` OK (Next 16.3.0) |
-| C02 | — | B2 mapa p.13 | — | Pendiente | Reemplazar Fig p.13, leyenda estándar | Pendiente | — |
-| C03 | — | B3 secuencia T0-T3 | — | Pendiente | Agregar Figs secuencia mismo escenario | Pendiente | — |
-| C04 | — | B4 comportamientos | — | Pendiente | 4 capturas hover/almacén/semáforo/panel | Pendiente | — |
-| C05 | — | B5 replicar + bloqueos leyenda | — | Pendiente | Fig incidencia con bloqueo en leyenda | Pendiente | — |
-| C06 | — | B6 resultados % / variantes | — | Pendiente | Tabla indicadores cant+%, definir panel único vs variantes | Pendiente | — |
-| C07 | — | B7 pedido causante en mapa | — | Pendiente | Fig colapso con PED resaltado | Pendiente | — |
-| C08 | — | B8 formulario pedido | — | Pendiente | Tabla campos vs planificación | Pendiente | — |
-| C09 | — | B9 modal avería | — | Pendiente | Fig modal completo 1-5 | Pendiente | — |
-| C10 | — | B10 alcance visualizador | — | Pendiente (requiere Marshall) | Matriz roles, nota PENDIENTE | Pendiente decisión | — |
+| C01 | 2026-09-15 | B1 §5.5 separación operación vs simulación | `app/page.tsx` | `ScenarioSelect` dividido en 5.5.1 operación (siempre activa) y 5.5.2 simulaciones (solo 5D/colapso); `simLabels`, `stateLabels` neutros, `Header` distingue día a día; botón `Iniciar simulación` deshabilitado en `day` | Reescribir §5.5, reemplazar Fig 3-botones por Fig 5.5-A y 5.5-B | Mergeado a main (b9c7c37) | build OK |
+| C02 | 2026-09-16 | B2 mapa p.13 | `app/page.tsx` (`Map`) | Grid mayor `#9fb0b8`, etiquetas con halo blanco y `#475569`; rutas 5→3, incidentes 7→4.5/5; almacenes/vehículos `size-8` + ring + `title` hover; clientes con IDs PED y posición corregida (bug `style` en div interno); leyenda estándar con símbolos; banner origen aclara abajo-izquierda | Reemplazar Fig p.13 + pie cuadrícula/leyenda | Implementado (commit único pendiente) | build OK |
+| C03 | 2026-09-16 | B3 secuencia T0-T3 | `app/page.tsx` (`Operator`) | Barra “Secuencia demo para capturas”: T0 Día2 running / T1 Día3 incident / T2 replanificado / T3 Día5 complete, mismo viewport | Agregar Figs T0-T3 + tabla evolución | Implementado | build OK |
+| C04 | 2026-09-16 | B4 comportamientos | `app/page.tsx` (`Operator`, `Map`) | Hover (`title` + `hover:scale`) en almacenes/vehículos/clientes; botones almacén con estado activo; panel rendimiento indica desplegado/cerrado + semáforo; panel almacén unificado stock+%+semáforo | 4 capturas: hover, almacén, semáforo, panel abierto/cerrado | Implementado | build OK |
+| C05 | 2026-09-16 | B5 replicar + bloqueos leyenda | `app/page.tsx` (`Map`) | Leyenda condicional: muestra Bloqueo en `incident`/`collapse` y Pedido causante en `collapse`; `Map` ya reutilizado en Operador y Visualizador | Fig incidencia con bloqueo en leyenda + nota mapa unificado | Implementado | build OK |
+| C06 | 2026-09-16 | B6 resultados % / variantes | `app/page.tsx` (`CollapseResults`, `Viewer`, `Operator`) | `CollapseResults({variant:'five'|'collapse'|'day', onLocate})` con títulos por variante; indicadores `184·87% / 16·8% / 8·4% / 3·1%`; `Viewer` final unificado a `184·87% / 16·8% / 11·5%`; `Operator` muestra panel en complete/five/collapse | Tabla indicadores cant+%, definir panel único con variantes, capturas por variante | Implementado | build OK |
+| C07 | 2026-09-16 | B7 pedido causante en mapa | `app/page.tsx` (`Map`, `CollapseResults`, `Viewer`) | `Map({highlightOrderId})`: PED-137 con halo `animate-ping` + etiqueta roja + callout; botón “Localizar en mapa” hace scroll a `#mapa-operativo`; `Viewer` colapso resalta PED-137; ID unificado (era PED-184) | Fig colapso con PED resaltado + texto localizar | Implementado | build OK |
+| C08 | 2026-09-16 | B8 formulario pedido | `app/page.tsx` (`Registrar`) | Validación: X 0-70, Y 0-50, unidades entero >0, Priorizada 4/8/12/18h; mensajes específicos “necesario para planificación” | Tabla campos vs planificación + Fig validación | Implementado | build OK |
+| C09 | 2026-09-16 | B9 modal avería | `app/page.tsx` (`Operator` breakdown) | Selects controlados (`faultUnit/faultType` inician `''`), instante sistema readonly `faultTime`, `faultError`, botones Confirmar (valida → `setState('incident')`) / Cancelar | Fig modal 1-5 + flujo avería | Implementado | build OK |
+| C10 | 2026-09-16 | B10 alcance visualizador | `app/page.tsx` (`Viewer`) | Nota ámbar “Alcance pendiente de confirmación (Marshall)”; fecha colapso unificada `11/09/2026 · 16:42`; selector de ejecuciones se mantiene como propuesta | Matriz roles + marca PENDIENTE Marshall | Implementado pendiente decisión | build OK |
 
 ## Detalle C01 — B1 (ya implementado, pendiente documentar en oficial)
 
@@ -69,3 +69,13 @@
 
 ---
 *Actualizado 2026-09-15. Este archivo SÍ se commitea en la rama; el documento oficial se edita a mano después.*
+
+## Detalle C02-C10 — implementado 2026-09-16 (commit único pendiente)
+
+**Fórmula % (documentar en oficial):** total 211 = 184 dentro (87%) + 16 fuera (8%) + 8 pendientes (4%) + 3 en ruta (1%). Viewer agrupa pendientes/en ruta = 11 (5%).
+
+**IDs unificados:** pedido causante = PED-137 (48,34) en Operator, Viewer y Map (antes PED-184 en Viewer). Instante colapso = 11/09/2026 16:42 en ambos.
+
+**Capturas pendientes para oficial (mismo viewport 1440px):** (1) p.13 mapa corregido; (2) T0-T3 secuencia; (3) hover + almacén seleccionado + semáforo + panel abierto/cerrado; (4) incidencia con Bloqueo en leyenda; (5) resultados collapse/five/day con %; (6) colapso con PED-137 resaltado + Localizar; (7) modal avería con instante + error + Confirmar/Cancelar; (8) formulario con errores X/Y/unidades; (9) visualizador con nota Marshall.
+
+**B10 abierto:** si Marshall dice solo día a día, eliminar selector viewerExecution y fijar scenario day en Viewer.
