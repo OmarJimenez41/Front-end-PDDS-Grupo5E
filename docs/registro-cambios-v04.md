@@ -18,7 +18,7 @@
 | C07 | 2026-09-16 | B7 pedido causante en mapa | `app/page.tsx` (`Map`, `CollapseResults`, `Viewer`) | `Map({highlightOrderId})`: PED-137 con halo `animate-ping` + etiqueta roja + callout; botón “Localizar en mapa” hace scroll a `#mapa-operativo`; `Viewer` colapso resalta PED-137; ID unificado (era PED-184) | Fig colapso con PED resaltado + texto localizar | Implementado | build OK |
 | C08 | 2026-09-16 | B8 formulario pedido | `app/page.tsx` (`Registrar`) | Validación: X 0-70, Y 0-50, unidades entero >0, Priorizada 4/8/12/18h; mensajes específicos “necesario para planificación” | Tabla campos vs planificación + Fig validación | Implementado | build OK |
 | C09 | 2026-09-16 | B9 modal avería | `app/page.tsx` (`Operator` breakdown) | Selects controlados (`faultUnit/faultType` inician `''`), instante sistema readonly `faultTime`, `faultError`, botones Confirmar (valida → `setState('incident')`) / Cancelar | Fig modal 1-5 + flujo avería | Implementado | build OK |
-| C10 | 2026-09-16 | B10 alcance visualizador | `app/page.tsx` (`Viewer`) | Nota ámbar “Alcance pendiente de confirmación (Marshall)”; fecha colapso unificada `11/09/2026 · 16:42`; selector de ejecuciones se mantiene como propuesta | Matriz roles + marca PENDIENTE Marshall | Implementado pendiente decisión | build OK |
+| C10 | 2026-09-16 | B10 alcance visualizador — CONFIRMADO | `app/page.tsx` (`Home`, `Viewer`) | Eliminado selector de históricas (`viewerExecution` con 5D finalizada/colapso finalizado); banner “Ejecución en curso (solo lectura)” con `scenario`/`state` vivos; `Viewer` recibe ejecución viva, sin acceso a históricas | Matriz roles: visualizador = solo lectura de ejecución en curso (día a día o simulación activa) | Confirmado por Iván 16/09, implementado | build OK |
 
 ## Detalle C01 — B1 (ya implementado, pendiente documentar en oficial)
 
@@ -79,3 +79,11 @@
 **Capturas pendientes para oficial (mismo viewport 1440px):** (1) p.13 mapa corregido; (2) T0-T3 secuencia; (3) hover + almacén seleccionado + semáforo + panel abierto/cerrado; (4) incidencia con Bloqueo en leyenda; (5) resultados collapse/five/day con %; (6) colapso con PED-137 resaltado + Localizar; (7) modal avería con instante + error + Confirmar/Cancelar; (8) formulario con errores X/Y/unidades; (9) visualizador con nota Marshall.
 
 **B10 abierto:** si Marshall dice solo día a día, eliminar selector viewerExecution y fijar scenario day en Viewer.
+
+## C11 — B10 confirmado 2026-09-16 (visualizador solo ejecución en curso)
+
+**Decisión:** el visualizador solo ve lo que está en ejecución actual, sea día a día o simulación activa. Sin históricas (no lista 5D finalizada ni colapso finalizado).
+
+**Código:** eliminado iewerExecution de Home; banner vivo con scenarioLabels[scenario] + stateLabels[effectiveState]; Viewer recibe scenario/effectiveState directos.
+
+**Para el oficial v04:** matriz roles — Visualizador: día a día en vivo SÍ, sim en ejecución SÍ (solo lectura), sims terminadas/históricas NO. Figura: banner ejecución en curso en lugar del selector.
