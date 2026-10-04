@@ -2,7 +2,7 @@
 // El reloj, la llegada de pedidos y la replanificación ocurren en el servidor:
 // el front-end solo inicia, consulta y controla la ejecución.
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080'
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080'
 
 export type EstadoSimulacion = 'EJECUTANDO' | 'PAUSADA' | 'FINALIZADA' | 'DETENIDA' | 'ERROR' | 'INTERRUMPIDA'
 
@@ -42,7 +42,7 @@ export interface VistaSimulacion {
 }
 
 async function pedir<T>(ruta: string, init?: RequestInit): Promise<T> {
-  const respuesta = await fetch(`${API}${ruta}`, { cache: 'no-store', ...init })
+  const respuesta = await fetch(`${API_URL}${ruta}`, { cache: 'no-store', ...init })
   if (!respuesta.ok) {
     const cuerpo = await respuesta.json().catch(() => null)
     throw new Error(cuerpo?.mensaje ?? `Error ${respuesta.status} en ${ruta}`)
@@ -53,6 +53,12 @@ async function pedir<T>(ruta: string, init?: RequestInit): Promise<T> {
 /** Fecha local sin zona, como la espera el back-end: 2026-01-29T08:00:00. */
 function sinZona(fecha: string): string {
   return fecha.length === 16 ? `${fecha}:00` : fecha
+}
+
+/** Mensaje legible para la interfaz, distinguiendo un back-end apagado de un rechazo. */
+export function mensajeError(error: unknown): string {
+  if (error instanceof TypeError) return `No se pudo conectar con el back-end (${API_URL}). ¿Está en ejecución?`
+  return error instanceof Error ? error.message : 'Error inesperado al llamar al back-end'
 }
 
 export function validarCobertura(fechaHoraInicio: string) {
