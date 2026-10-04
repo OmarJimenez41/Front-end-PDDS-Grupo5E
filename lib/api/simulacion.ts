@@ -41,7 +41,7 @@ export interface VistaSimulacion {
   pedidos: { incorporados: number; entregados: number; entregadosATiempo: number; noEntregados: number; abiertos: number }
 }
 
-async function pedir<T>(ruta: string, init?: RequestInit): Promise<T> {
+export async function pedir<T>(ruta: string, init?: RequestInit): Promise<T> {
   const respuesta = await fetch(`${API_URL}${ruta}`, { cache: 'no-store', ...init })
   if (!respuesta.ok) {
     const cuerpo = await respuesta.json().catch(() => null)
