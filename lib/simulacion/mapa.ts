@@ -33,7 +33,9 @@ export function posicionEn(aristas: Arista[], t: number, base: Punto): Punto {
 export function recorridoRestante(aristas: Arista[], t: number, desde: Punto): Punto[] {
   const pendientes = aristas.filter(a => a.llegadaH > t)
   if (pendientes.length === 0) return []
-  return [desde, ...pendientes.map(a => ({ x: a.x2, y: a.y2 }))]
+  // Si la primera arista pendiente aún no empezó, la ruta pasa por su nodo de salida
+  const inicio = t < pendientes[0].salidaH ? [{ x: pendientes[0].x1, y: pendientes[0].y1 }] : []
+  return [desde, ...inicio, ...pendientes.map(a => ({ x: a.x2, y: a.y2 }))]
 }
 
 export function semaforo(margenH: number, u: Umbrales): Semaforo {

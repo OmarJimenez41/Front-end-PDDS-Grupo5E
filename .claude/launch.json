@@ -10,15 +10,12 @@
       "name": "visor-backend-temporal",
       "runtimeExecutable": "java",
       "runtimeArgs": ["@C:/Users/Omar Jimenez/AppData/Local/Temp/claude/C--Users-Omar-Jimenez-OneDrive-Desktop-PDDS-Front-end-PDDS-Front-end-PDDS-Grupo5E/4be44f84-5aab-4f63-b82e-94f88e6e9c8b/scratchpad/visor.args"],
-      "port": 18080
+      "port": 18097
     },
     {
-      "name": "start (front-end Next.js: requiere Node 20+ y pnpm install)",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "run",
-        "start"
-      ],
+      "name": "front-end (Next.js dev)",
+      "runtimeExecutable": "C:/Users/Omar Jimenez/AppData/Local/Microsoft/WinGet/Packages/OpenJS.NodeJS.LTS_Microsoft.Winget.Source_8wekyb3d8bbwe/node-v24.19.0-win-x64/node.exe",
+      "runtimeArgs": ["node_modules/next/dist/bin/next", "dev", "-p", "3000"],
       "port": 3000
     }
   ]
