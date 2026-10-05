@@ -1,0 +1,25 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "banco-experimentacion (back-end Java, ya en marcha)",
+      "url": "http://localhost:8091",
+      "port": 8091
+    },
+    {
+      "name": "visor-backend-temporal",
+      "runtimeExecutable": "java",
+      "runtimeArgs": ["@C:/Users/Omar Jimenez/AppData/Local/Temp/claude/C--Users-Omar-Jimenez-OneDrive-Desktop-PDDS-Front-end-PDDS-Front-end-PDDS-Grupo5E/4be44f84-5aab-4f63-b82e-94f88e6e9c8b/scratchpad/visor.args"],
+      "port": 18080
+    },
+    {
+      "name": "start (front-end Next.js: requiere Node 20+ y pnpm install)",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "run",
+        "start"
+      ],
+      "port": 3000
+    }
+  ]
+}
