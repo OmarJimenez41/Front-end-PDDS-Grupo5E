@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Bike, Car, Check, ChevronDown, ChevronLeft, FileText, MapPin, Navigation, Package, PanelLeftOpen, Settings2, Truck, Warehouse, Wrench, X } from 'lucide-react'
-import { type MapaDatos, type TipoVehiculo, consultarMapa, listarSimulaciones } from '@/lib/api/operacion'
+import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import { AlertTriangle, Bike, Car, Check, ChevronDown, ChevronLeft, FileText, MapPin, Navigation, Package, PanelLeftOpen, Search, Settings2, Truck, Warehouse, Wrench, X } from 'lucide-react'
+import { type EstadoPedido, type MapaDatos, type PedidoRastreo, type TipoVehiculo, UMBRALES_PEDIDO, consultarMapa, listarSimulaciones } from '@/lib/api/operacion'
 import { type Cobertura, type VistaSimulacion, consultarSimulacion, detenerSimulacion, iniciarCincoDias, mensajeError, pausarSimulacion, reanudarSimulacion, validarCobertura } from '@/lib/api/simulacion'
 
 type Role = 'registrador' | 'operador' | 'visualizador'
@@ -26,12 +26,17 @@ const fechaHora = (iso: string, segundos = false) => { const [f, h = ''] = iso.s
 const cincoDiasDespues = (inicio: string) => { const [f, h] = inicio.split('T'); const [a, m, d] = f.split('-').map(Number); const fin = new Date(Date.UTC(a, m - 1, d + 5)); const p = (n: number) => String(n).padStart(2, '0'); return `${p(fin.getUTCDate())}/${p(fin.getUTCMonth() + 1)}/${fin.getUTCFullYear()} · ${(h ?? '').slice(0, 5)}` }
 /** Horas decimales del reloj del back-end como «día N · hh:mm» (hora 0 = 00:00 del día 1). */
 const horaSimulada = (h: number) => { const m = Math.round(h * 60); return `día ${Math.floor(m / 1440) + 1} · ${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}` }
+/** Horas del escenario como fecha de calendario, a partir de la fecha base de la simulación. */
+const fechaDesdeBase = (base: string, h: number) => { const [a, m, d] = base.split('-').map(Number); const t = new Date(Date.UTC(a, m - 1, d) + Math.round(h * 60) * 60000); const p = (n: number) => String(n).padStart(2, '0'); return `${p(t.getUTCDate())}/${p(t.getUTCMonth() + 1)}/${t.getUTCFullYear()} · ${p(t.getUTCHours())}:${p(t.getUTCMinutes())}` }
+const duracion = (seg: number) => { const s = Math.max(0, Math.floor(seg)); const p = (n: number) => String(n).padStart(2, '0'); return `${p(Math.floor(s / 3600))}:${p(Math.floor(s / 60) % 60)}:${p(s % 60)}` }
+/** Estimación del tiempo real ejecutado según el reloj del back-end (horas simuladas ÷ ritmo); solo sirve de punto de partida. */
+const tiempoReal = (sim: VistaSimulacion) => sim.simulacion.factor > 0 ? (sim.simulacion.relojH - sim.simulacion.inicioH) * 3600 / sim.simulacion.factor : 0
 const porcentaje = (parte: number, total: number) => total > 0 ? `${Math.round(parte / total * 100)}%` : '—'
 const simViva = (sim: VistaSimulacion | null) => sim?.simulacion.estado === 'EJECUTANDO' || sim?.simulacion.estado === 'PAUSADA'
 
 const stateLabels: Record<ExecState, string> = { idle: 'Lista · sin iniciar', running: 'En ejecución', incident: 'Incidencia activa', complete: 'Periodo completado', collapse: 'Colapso logístico', disconnected: 'Solo consulta · desconectado' }
 
-function Header({ scenario, state, replanned, sim, escenario }: { scenario: Scenario; state: ExecState; replanned: boolean; sim: VistaSimulacion | null; escenario?: { id: number; relojH: number } | null }) {
+function Header({ scenario, state, replanned, sim, segReal, escenario }: { scenario: Scenario; state: ExecState; replanned: boolean; sim: VistaSimulacion | null; segReal: number; escenario?: { id: number; relojH: number } | null }) {
   const day = state === 'idle' && scenario !== 'day' ? (scenario === 'five' ? 'Sin iniciar · dura 5 días desde el inicio' : 'Sin iniciar · sin límite de periodo') : scenario === 'five' ? (state === 'complete' ? 'Día 5 de 5' : state === 'incident' ? 'Día 3 de 5' : 'Día 2 de 5') : scenario === 'day' ? (replanned && state === 'running' ? '08/09/2026 · 10:45 · plan actualizado' : '08/09/2026 · 08:35') : state === 'collapse' ? '11/09/2026 · 16:42' : 'Sin límite de periodo'
   const incidentView = state === 'incident'
   const collapseView = scenario === 'collapse' && state === 'collapse'
@@ -40,7 +45,7 @@ function Header({ scenario, state, replanned, sim, escenario }: { scenario: Scen
   // Con una simulación del back-end, la fecha es la que está simulando el servidor (día, hora, minuto y segundo)
   const real = scenario === 'five' && sim ? `Día ${Math.min(5, Math.floor(sim.progreso * 5) + 1)} de 5 · ${fechaHora(sim.fechaSimulada, true)}` : null
   const headerDate = real ?? (!sim && escenario ? `Hora simulada ${horaSimulada(escenario.relojH)}` : null) ?? (collapseView ? '11/09/2026 · 16:42' : incidentView ? (scenario === 'day' ? '08/09/2026 · 10:20 · incidencia activa' : 'Día 3 de 5 · 11/09/2026 · 10:20') : fiveDayRunning ? (replanned ? 'Día 3 de 5 · 11/09/2026 · 11:05 · plan actualizado' : 'Día 2 de 5 · 10/09/2026 · 14:35') : day)
-  return <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-2"><div className="flex items-center gap-4"><div className="flex size-9 items-center justify-center bg-blue-700 text-white"><Navigation className="size-5" /></div><div><p className="text-lg font-bold">PaqRap</p><p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Centro de control</p></div><div className="hidden h-8 w-px bg-slate-200 md:block" /><div className="hidden md:block"><p className="text-sm font-bold">{headerScenario}</p><p className="text-xs text-slate-500">{headerDate}</p>{collapseView && <p className="text-xs font-semibold text-slate-500">Duración total 00:37:26</p>}{incidentView && <p className="text-xs font-semibold text-slate-500">Tiempo transcurrido 00:32:10</p>}{fiveDayRunning && !real && <p className="text-xs font-semibold text-slate-500">Tiempo transcurrido {replanned ? '00:34:50' : '00:18:42'}</p>}{real && sim && <p className="text-xs font-semibold text-slate-500">Avance {Math.round(sim.progreso * 100)}% · {sim.simulacion.pedidosIncorporados} de {sim.simulacion.pedidosProgramados} pedidos ingresados</p>}</div></div><div className="flex items-center gap-3"><div className={`flex items-center gap-2 border px-3 py-2 text-xs font-semibold ${state === 'incident' || state === 'collapse' ? 'border-red-200 bg-red-50 text-red-700' : state === 'disconnected' ? 'border-amber-200 bg-amber-50 text-amber-700' : state === 'complete' ? 'border-slate-200 bg-slate-50 text-slate-600' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}><span className="size-2 rounded-full bg-current" />{stateLabels[state]}</div></div></header>
+  return <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-2"><div className="flex items-center gap-4"><div className="flex size-9 items-center justify-center bg-blue-700 text-white"><Navigation className="size-5" /></div><div><p className="text-lg font-bold">PaqRap</p><p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Centro de control</p></div><div className="hidden h-8 w-px bg-slate-200 md:block" /><div className="hidden md:block"><p className="text-sm font-bold">{headerScenario}</p><p className="text-xs text-slate-500">{headerDate}</p>{collapseView && <p className="text-xs font-semibold text-slate-500">Duración total 00:37:26</p>}{incidentView && <p className="text-xs font-semibold text-slate-500">Tiempo transcurrido 00:32:10</p>}{fiveDayRunning && !real && <p className="text-xs font-semibold text-slate-500">Tiempo transcurrido {replanned ? '00:34:50' : '00:18:42'}</p>}{real && sim && <p className="text-xs font-semibold text-slate-700">Tiempo real transcurrido {duracion(segReal)}</p>}{real && sim && <p className="text-xs font-semibold text-slate-500">Avance {Math.round(sim.progreso * 100)}% · {sim.simulacion.pedidosIncorporados} de {sim.simulacion.pedidosProgramados} pedidos ingresados</p>}</div></div><div className="flex items-center gap-3"><div className={`flex items-center gap-2 border px-3 py-2 text-xs font-semibold ${state === 'incident' || state === 'collapse' ? 'border-red-200 bg-red-50 text-red-700' : state === 'disconnected' ? 'border-amber-200 bg-amber-50 text-amber-700' : state === 'complete' ? 'border-slate-200 bg-slate-50 text-slate-600' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}><span className="size-2 rounded-full bg-current" />{stateLabels[state]}</div></div></header>
 }
 
 function Nav({ role, setRole }: { role: Role; setRole: (r: Role) => void }) { return <nav className="flex flex-wrap gap-1 border-b border-slate-200 bg-slate-50 px-5 pt-1">{[['registrador', 'Registrar pedidos', FileText], ['operador', 'Operar sistema', Settings2], ['visualizador', 'Solo consulta', MapPin]].map(([id, label, Icon]) => <button key={id as string} onClick={() => setRole(id as Role)} className={`flex items-center gap-2 border-b-2 px-4 py-2 text-xs font-bold ${role === id ? 'border-blue-600 bg-white text-blue-700' : 'border-transparent text-slate-500'}`}><Icon className="size-4" />{label as string}</button>)}</nav> }
@@ -57,9 +62,181 @@ const CLASE_SEMAFORO = { verde: 'bg-emerald-600', ambar: 'bg-amber-500', rojo: '
 // Nombres que usa el panel del operador para cada almacén del back-end
 const NOMBRE_ALMACEN: Record<string, string> = { 'ALM-CENTRAL': 'Almacén central', 'ALM-NOROESTE': 'Nor-Oeste', 'ALM-ESTE': 'Intermedio Este' }
 
+// Semáforo de stock de los almacenes intermedios (% disponible); los mismos valores por defecto del panel de parámetros
+const UMBRAL_STOCK = { verde: 50, rojo: 20 }
+const tonoStock = (pct: number) => pct >= UMBRAL_STOCK.verde ? 'verde' : pct < UMBRAL_STOCK.rojo ? 'rojo' : 'ambar'
+const TEXTO_SEMAFORO = { verde: 'text-emerald-700', ambar: 'text-amber-700', rojo: 'text-red-700' } as const
+const ETIQUETA_ESTADO: Record<EstadoPedido, string> = { PENDIENTE: 'Pendiente de asignar', ASIGNADO: 'Asignado a una ruta', EN_RUTA: 'En ruta', ENTREGADO: 'Entregado', NO_ENTREGADO: 'No entregado' }
+
+// Escena de demostración (sin back-end): mismos almacenes, unidades y pedidos del prototipo
+const DEMO_ALMACENES = [
+  { nombre: 'Almacén central', x: 25, y: 15, central: true, pct: null, enBase: null },
+  { nombre: 'Nor-Oeste', x: 12, y: 38, central: false, pct: 68, enBase: null },
+  { nombre: 'Intermedio Este', x: 55, y: 27, central: false, pct: 68, enBase: null },
+]
+const DEMO_RASTREO: PedidoRastreo[] = ([['PED-002', 19, 29, 'MOTO', 'M-022', 10.1], ['PED-001', 35, 18, 'AUTO', 'V-014', 11.4], ['PED-003', 43, 7, 'BICICLETA', 'B-031', 12.2], ['PED-137', 48, 34, 'AUTO', 'V-014', 13.0], ['PED-140', 66, 42, 'AUTO', 'V-014', 14.6]] as [string, number, number, TipoVehiculo, string, number][])
+  .map(([codigo, x, y, tipo, vehiculo, eta], i): PedidoRastreo => ({ id: i + 1, codigo, x, y, cantidad: 2, tipo: 'REGULAR', estado: 'EN_RUTA', horaIngresoH: 8.5, fechaLimiteH: 44.5, entregadoEnH: null, etaH: eta, vehiculoId: null, vehiculoCodigo: vehiculo, tipoVehiculo: tipo, margenH: 44.5 - eta, semaforo: 'verde' }))
+
 // Con `datos` (escenario real del back-end) el mapa dibuja almacenes, vehículos, rutas y pedidos reales;
-// sin `datos` muestra la escena de demostración del prototipo.
-function Map({ state, highlightOrderId, full = false, replanned = false, onWarehouse, datos }: { state: ExecState; highlightOrderId?: string | null; full?: boolean; replanned?: boolean; onWarehouse?: (name: string) => void; datos?: MapaDatos | null }) { const incident = state === 'incident'; const isCollapse = state === 'collapse'; const W = 1000, H = 520; const p = (x: number, y: number) => `${x / 70 * W},${H - y / 50 * H}`; const r = (a: [number, number][]) => a.map(([x, y]) => p(x, y)).join(' '); return <div className={`${full ? 'absolute inset-0' : 'relative min-h-[480px]'} overflow-hidden bg-[#e9eef0]`}><svg className="absolute inset-0 size-full" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"><rect width={W} height={H} fill="#e9eef0" />{Array.from({ length: 71 }, (_, x) => <path key={`x${x}`} d={`M${x / 70 * W} 0V${H}`} stroke={x % 10 === 0 ? '#9fb0b8' : '#d5dde0'} strokeWidth={x % 10 === 0 ? 1.1 : .5} />)}{Array.from({ length: 51 }, (_, y) => <path key={`y${y}`} d={`M0 ${H - y / 50 * H}H${W}`} stroke={y % 10 === 0 ? '#9fb0b8' : '#d5dde0'} strokeWidth={y % 10 === 0 ? 1.1 : .5} />)}{[0, 10, 20, 30, 40, 50, 60, 70].map(x => <text key={x} x={x / 70 * W + 4} y={H - 8} fill="#475569" fontSize="12" fontWeight="700" style={{ paintOrder: 'stroke', stroke: '#ffffff', strokeWidth: 3 }}>{x}</text>)}{[0, 10, 20, 30, 40, 50].map(y => <text key={y} x="8" y={H - y / 50 * H - 6} fill="#475569" fontSize="12" fontWeight="700" style={{ paintOrder: 'stroke', stroke: '#ffffff', strokeWidth: 3 }}>{y}</text>)}{!datos && <><polyline points={r([[25, 15], [25, 21], [35, 21], [35, 34], [48, 34], [48, 42], [66, 42]])} fill="none" stroke="#2563eb" strokeWidth="3" opacity="0.85" /><polyline points={r([[12, 38], [12, 29], [19, 29], [19, 18], [35, 18], [35, 7], [43, 7]])} fill="none" stroke="#7c3aed" strokeWidth="3" opacity="0.85" /><polyline points={r([[55, 27], [55, 20], [48, 20], [48, 12], [43, 12], [43, 7]])} fill="none" stroke="#0f9f8d" strokeWidth="3" opacity="0.85" />{(incident || replanned) && <><polyline points={r([[25, 15], [25, 21], [35, 21], [35, 34], [48, 34]])} fill="none" stroke="#94a3b8" strokeWidth="4.5" strokeDasharray="12 8" /><polyline points={r([[25, 15], [25, 21], [29, 21], [29, 27], [48, 27], [48, 34]])} fill="none" stroke="#2563eb" strokeWidth="4.5" /><polyline points={r([[31, 21], [34, 21], [34, 25]])} fill="none" stroke="#dc2626" strokeWidth="5" /></>}</>}{datos?.rutas.map(ru => <g key={ru.id}><polyline points={r(ru.puntos)} fill="none" stroke={COLOR_TIPO[ru.tipo]} strokeWidth="3" opacity="0.85" />{ru.recorrido.length > 1 && <polyline points={r(ru.recorrido)} fill="none" stroke="#94a3b8" strokeWidth="3.5" strokeDasharray="6 5" />}</g>)}</svg>{!full && <div className="absolute left-4 top-4 bg-white/90 px-3 py-2 text-xs font-bold text-slate-700 shadow"><MapPin className="mr-2 inline size-4 text-blue-600" />Origen (0,0) abajo-izquierda · Cuadrícula 1 km · 70 × 50 km</div>}{(datos ? datos.almacenes.map(a => [NOMBRE_ALMACEN[a.codigo] ?? a.codigo, a.x, a.y, a.central ? 'blue' : 'slate', a.vehiculosEnBase]) : [['Almacén central', 25, 15, 'blue'], ['Nor-Oeste', 12, 38, 'slate'], ['Intermedio Este', 55, 27, 'slate']]).map(([name, x, y, tone, enBase]) => <div key={name as string} title={`${name} (${x},${y})${onWarehouse ? ' · clic para ver stock' : ''}`} onClick={() => onWarehouse?.(name as string)} className={`absolute -translate-x-1/2 -translate-y-1/2 ${onWarehouse ? 'cursor-pointer transition hover:scale-110' : ''}`} style={{ left: `${(x as number) / 70 * 100}%`, top: `${100 - (y as number) / 50 * 100}%` }}><div className={`flex size-8 items-center justify-center border-2 border-white shadow-md ring-1 ring-slate-300 ${tone === 'blue' ? 'bg-blue-700' : 'bg-slate-700'} text-white`}><Warehouse className="size-4" /></div><span className="mt-1 block whitespace-nowrap bg-white/90 px-1.5 py-0.5 text-[10px] font-bold text-slate-700 shadow-sm">{name as string} · ({x},{y}){datos && ` · ${enBase} en base`}</span></div>)}{(datos ? datos.vehiculos.map(v => [ETIQUETA_TIPO[v.tipo], Math.round(v.x * 10) / 10, Math.round(v.y * 10) / 10, v.tipo === 'AUTO' ? Car : Bike, CLASE_TIPO[v.tipo], `${v.codigo} · carga ${v.carga}/${v.capacidad}`]) : [['Auto', 35, 34, Car, 'bg-blue-600', 'V-014 · 40 km/h'], ['Moto', 19, 29, Bike, 'bg-violet-600', 'M-022 · 25 km/h'], ['Bicicleta', 48, 12, Bike, 'bg-teal-600', 'B-031 · 12 km/h']]).map(([name, x, y, Icon, color, detail]) => <div key={detail as string} title={`${name} ${detail} · (${x},${y})`} className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer transition hover:scale-110" style={{ left: `${(x as number) / 70 * 100}%`, top: `${100 - (y as number) / 50 * 100}%` }}><div className={`flex size-8 items-center justify-center rounded-full ${color as string} text-white shadow-md ring-2 ring-white`}><Icon className="size-4" /></div><span className="mt-1 block whitespace-nowrap bg-white/90 px-1 text-[10px] font-bold text-slate-700 shadow-sm">{name as string}</span></div>)}{datos ? datos.pedidos.map(pe => <div key={pe.id} title={`${pe.codigo} · destino (${pe.x},${pe.y}) · ${pe.cantidad} u · ${pe.estado}${pe.margenH != null ? ` · margen ${pe.margenH.toFixed(1)} h` : ''}`} style={{ left: `${pe.x / 70 * 100}%`, top: `${100 - pe.y / 50 * 100}%` }} className="absolute -translate-x-1/2 -translate-y-1/2 transition hover:scale-125"><div className={`size-3.5 rounded-full border-2 border-white shadow-md ${CLASE_SEMAFORO[pe.semaforo]}`} />{datos.pedidos.length <= 40 && <span className="mt-1 block whitespace-nowrap bg-white/90 px-1 text-[10px] font-bold text-slate-700 shadow-sm">{pe.codigo}</span>}</div>) : [['PED-002', 19, 29], ['PED-001', 35, 18], ['PED-003', 43, 7], ['PED-137', 48, 34], ['PED-140', 66, 42]].map(([id, x, y]) => { const isCause = (highlightOrderId === id) || ((isCollapse) && id === 'PED-137'); const isIncidentClient = (i => i === 3)([['PED-002', 19, 29], ['PED-001', 35, 18], ['PED-003', 43, 7], ['PED-137', 48, 34], ['PED-140', 66, 42]].findIndex(([cid]) => cid === id)); return <div key={id as string} title={`${id} · destino (${x},${y})`} style={{ left: `${(x as number) / 70 * 100}%`, top: `${100 - (y as number) / 50 * 100}%` }} className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer transition hover:scale-125"><div className={`size-3.5 rounded-full border-2 border-white shadow-md ${isCause ? 'animate-ping bg-red-600' : ''}`} /><div className={`size-3.5 rounded-full border-2 border-white shadow-md absolute inset-0 ${isCause ? 'bg-red-600' : (incident && isIncidentClient) ? 'bg-amber-500' : 'bg-emerald-600'}`} /><span className={`mt-1 block whitespace-nowrap px-1 text-[10px] font-bold shadow-sm ${isCause ? 'bg-red-700 text-white' : 'bg-white/90 text-slate-700'}`}>{id as string}</span>{isCause && <span className="mt-0.5 block whitespace-nowrap bg-red-50 px-1 text-[10px] font-bold text-red-700 shadow">Pedido causante del colapso</span>}</div> })}{incident && <div className="absolute left-[45%] top-[32%] bg-red-50 px-3 py-2 text-xs font-bold text-red-700 shadow"><AlertTriangle className="mr-1 inline size-4" />Incidencia detectada · Replanificación en proceso</div>}{isCollapse && highlightOrderId && <div className={`absolute right-4 ${full ? 'top-16' : 'top-4'} bg-red-700 px-3 py-2 text-xs font-bold text-white shadow`}>Localizando {highlightOrderId} · (48,34) · fuera de plazo</div>}<div className={`absolute ${full ? 'bottom-9 right-4 max-w-[560px]' : 'bottom-4 left-4'} flex flex-wrap items-center gap-x-4 gap-y-1 bg-white/95 px-3 py-2 text-[10px] font-semibold text-slate-700 shadow`}>{full && <span className="w-full text-slate-500"><MapPin className="mr-1 inline size-3 text-blue-600" />Origen (0,0) abajo-izquierda · Cuadrícula 1 km · 70 × 50 km</span>}<span className="flex items-center gap-1"><span className="inline-block size-3 border-2 border-white bg-blue-700 shadow" />Almacén</span><span className="flex items-center gap-1"><span className="inline-block size-3 rounded-full bg-blue-600" />Auto</span><span className="flex items-center gap-1"><span className="inline-block size-3 rounded-full bg-violet-600" />Moto</span><span className="flex items-center gap-1"><span className="inline-block size-3 rounded-full bg-teal-600" />Bicicleta</span><span className="flex items-center gap-1"><span className="inline-block size-3 rounded-full bg-emerald-600" />{datos ? 'Pedido · margen holgado' : 'Cliente destino'}</span>{datos && <><span className="flex items-center gap-1"><span className="inline-block size-3 rounded-full bg-amber-500" />Margen justo</span><span className="flex items-center gap-1"><span className="inline-block size-3 rounded-full bg-red-600" />Margen crítico</span></>}<span className="flex items-center gap-1"><span className="inline-block h-0.5 w-5 bg-blue-600" />Ruta vigente</span><span className="flex items-center gap-1"><span className="inline-block h-0 w-5 border-t-2 border-dashed border-slate-400" />{datos ? 'Tramo ya recorrido' : 'Ruta anterior'}</span>{(incident || replanned || isCollapse) && <span className="flex items-center gap-1 text-red-700"><AlertTriangle className="size-3" />Bloqueo</span>}{isCollapse && <span className="flex items-center gap-1 text-red-700"><span className="inline-block size-3 rounded-full bg-red-600" />Pedido causante</span>}</div></div> }
+// sin `datos` muestra la escena de demostración del prototipo. `buscado` es el código del pedido que se rastrea.
+function Map({ state, highlightOrderId, full = false, replanned = false, onWarehouse, onPedido, datos, buscado }: { state: ExecState; highlightOrderId?: string | null; full?: boolean; replanned?: boolean; onWarehouse?: (name: string) => void; onPedido?: (codigo: string) => void; datos?: MapaDatos | null; buscado?: string | null }) {
+  const incident = state === 'incident'
+  const isCollapse = state === 'collapse'
+  const W = 1000, H = 520
+  const p = (x: number, y: number) => `${x / 70 * W},${H - y / 50 * H}`
+  const r = (a: [number, number][]) => a.map(([x, y]) => p(x, y)).join(' ')
+  const pos = (x: number, y: number) => ({ left: `${x / 70 * 100}%`, top: `${100 - y / 50 * 100}%` })
+  const objetivo = buscado ? (datos?.rastreo ?? DEMO_RASTREO).find(q => q.codigo === buscado) ?? null : null
+  const almacenes = datos ? datos.almacenes.map(a => ({ nombre: NOMBRE_ALMACEN[a.codigo] ?? a.codigo, x: a.x, y: a.y, central: a.central, pct: a.pct, enBase: a.vehiculosEnBase as number | null })) : DEMO_ALMACENES
+  const demoPedidos = DEMO_RASTREO.map(q => [q.codigo, q.x, q.y] as const)
+  return <div className={`${full ? 'absolute inset-0' : 'relative min-h-[480px]'} overflow-hidden bg-[#e9eef0]`}>
+    <svg className="absolute inset-0 size-full" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+      <rect width={W} height={H} fill="#e9eef0" />
+      {Array.from({ length: 71 }, (_, x) => <path key={`x${x}`} d={`M${x / 70 * W} 0V${H}`} stroke={x % 10 === 0 ? '#9fb0b8' : '#d5dde0'} strokeWidth={x % 10 === 0 ? 1.1 : .5} />)}
+      {Array.from({ length: 51 }, (_, y) => <path key={`y${y}`} d={`M0 ${H - y / 50 * H}H${W}`} stroke={y % 10 === 0 ? '#9fb0b8' : '#d5dde0'} strokeWidth={y % 10 === 0 ? 1.1 : .5} />)}
+      {[0, 10, 20, 30, 40, 50, 60, 70].map(x => <text key={x} x={x / 70 * W + 4} y={H - 8} fill="#475569" fontSize="12" fontWeight="700" style={{ paintOrder: 'stroke', stroke: '#ffffff', strokeWidth: 3 }}>{x}</text>)}
+      {[0, 10, 20, 30, 40, 50].map(y => <text key={y} x="8" y={H - y / 50 * H - 6} fill="#475569" fontSize="12" fontWeight="700" style={{ paintOrder: 'stroke', stroke: '#ffffff', strokeWidth: 3 }}>{y}</text>)}
+      {!datos && <>
+        <polyline points={r([[25, 15], [25, 21], [35, 21], [35, 34], [48, 34], [48, 42], [66, 42]])} fill="none" stroke="#2563eb" strokeWidth="3" opacity="0.85" />
+        <polyline points={r([[12, 38], [12, 29], [19, 29], [19, 18], [35, 18], [35, 7], [43, 7]])} fill="none" stroke="#7c3aed" strokeWidth="3" opacity="0.85" />
+        <polyline points={r([[55, 27], [55, 20], [48, 20], [48, 12], [43, 12], [43, 7]])} fill="none" stroke="#0f9f8d" strokeWidth="3" opacity="0.85" />
+        {(incident || replanned) && <>
+          <polyline points={r([[25, 15], [25, 21], [35, 21], [35, 34], [48, 34]])} fill="none" stroke="#94a3b8" strokeWidth="4.5" strokeDasharray="12 8" />
+          <polyline points={r([[25, 15], [25, 21], [29, 21], [29, 27], [48, 27], [48, 34]])} fill="none" stroke="#2563eb" strokeWidth="4.5" />
+          <polyline points={r([[31, 21], [34, 21], [34, 25]])} fill="none" stroke="#dc2626" strokeWidth="5" />
+        </>}
+      </>}
+      {datos?.rutas.map(ru => { const marcada = objetivo?.vehiculoId === ru.vehiculoId; return <g key={ru.id}>
+        <polyline points={r(ru.puntos)} fill="none" stroke={COLOR_TIPO[ru.tipo]} strokeWidth={marcada ? 6 : 3} opacity={objetivo && !marcada ? 0.35 : 0.85} />
+        {ru.recorrido.length > 1 && <polyline points={r(ru.recorrido)} fill="none" stroke="#94a3b8" strokeWidth={marcada ? 6.5 : 3.5} strokeDasharray="6 5" />}
+      </g> })}
+    </svg>
+    {!full && <div className="absolute left-4 top-4 bg-white/90 px-3 py-2 text-xs font-bold text-slate-700 shadow"><MapPin className="mr-2 inline size-4 text-blue-600" />Origen (0,0) abajo-izquierda · Cuadrícula 1 km · 70 × 50 km</div>}
+
+    {/* Almacenes: barra y % de stock disponible (el central es ilimitado) y unidades estacionadas en su base */}
+    {almacenes.map(a => <div key={a.nombre} title={`${a.nombre} (${a.x},${a.y}) · ${a.pct == null ? 'stock ilimitado' : `stock ${a.pct}%`}${onWarehouse ? ' · clic para ver detalle' : ''}`} onClick={() => onWarehouse?.(a.nombre)} className={`absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center ${onWarehouse ? 'cursor-pointer transition hover:scale-110' : ''}`} style={pos(a.x, a.y)}>
+      <div className={`flex size-8 items-center justify-center border-2 border-white shadow-md ring-1 ring-slate-300 ${a.central ? 'bg-blue-700' : 'bg-slate-700'} text-white`}><Warehouse className="size-4" /></div>
+      {a.pct != null && <div className="mt-1 h-1.5 w-12 bg-white ring-1 ring-slate-300"><div className={`h-full ${CLASE_SEMAFORO[tonoStock(a.pct)]}`} style={{ width: `${a.pct}%` }} /></div>}
+      <span className="mt-1 block whitespace-nowrap bg-white/90 px-1.5 py-0.5 text-[10px] font-bold text-slate-700 shadow-sm">{a.nombre} · {a.pct == null ? <span className="text-blue-700">stock ilimitado</span> : <span className={TEXTO_SEMAFORO[tonoStock(a.pct)]}>stock {a.pct}%</span>}</span>
+      {a.enBase != null && <span className="block whitespace-nowrap bg-white/90 px-1.5 text-[10px] font-semibold text-slate-500 shadow-sm">{a.enBase} vehículos en base</span>}
+    </div>)}
+
+    {(datos ? datos.vehiculos.map(v => [ETIQUETA_TIPO[v.tipo], Math.round(v.x * 10) / 10, Math.round(v.y * 10) / 10, v.tipo === 'AUTO' ? Car : Bike, CLASE_TIPO[v.tipo], `${v.codigo} · carga ${v.carga}/${v.capacidad}`, objetivo?.vehiculoId === v.id]) : [['Auto', 35, 34, Car, 'bg-blue-600', 'V-014 · 40 km/h', false], ['Moto', 19, 29, Bike, 'bg-violet-600', 'M-022 · 25 km/h', false], ['Bicicleta', 48, 12, Bike, 'bg-teal-600', 'B-031 · 12 km/h', false]]).map(([name, x, y, Icon, color, detail, marcado]) => <div key={detail as string} title={`${name} ${detail} · (${x},${y})`} className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer transition hover:scale-110" style={pos(x as number, y as number)}>
+      <div className={`flex size-8 items-center justify-center rounded-full ${color as string} text-white shadow-md ring-2 ${marcado ? 'ring-4 ring-blue-300' : 'ring-white'}`}>{(() => { const Icono = Icon as typeof Car; return <Icono className="size-4" /> })()}</div>
+      <span className="mt-1 block whitespace-nowrap bg-white/90 px-1 text-[10px] font-bold text-slate-700 shadow-sm">{name as string}</span>
+    </div>)}
+
+    {datos ? datos.pedidos.map(pe => { const esBuscado = pe.codigo === buscado; return <div key={pe.id} onClick={() => onPedido?.(pe.codigo)} title={`${pe.codigo} · destino (${pe.x},${pe.y}) · ${pe.cantidad} u · ${ETIQUETA_ESTADO[pe.estado]}${pe.margenH != null ? ` · margen ${pe.margenH.toFixed(1)} h` : ''}${onPedido ? ' · clic para ver la ficha' : ''}`} style={pos(pe.x, pe.y)} className={`absolute -translate-x-1/2 -translate-y-1/2 transition hover:scale-125 ${onPedido ? 'cursor-pointer' : ''} ${esBuscado ? 'z-[5]' : ''}`}>
+      <div className="relative size-3.5">{esBuscado && <div className="absolute -inset-1.5 animate-ping rounded-full bg-blue-500/60" />}<div className={`relative size-3.5 rounded-full border-2 shadow-md ${esBuscado ? 'border-blue-700 ring-2 ring-blue-500' : 'border-white'} ${CLASE_SEMAFORO[pe.semaforo]}`} /></div>
+      {(esBuscado || datos.pedidos.length <= 40) && <span className={`mt-1 block whitespace-nowrap px-1 text-[10px] font-bold shadow-sm ${esBuscado ? 'bg-blue-700 text-white' : 'bg-white/90 text-slate-700'}`}>{pe.codigo}</span>}
+    </div> }) : demoPedidos.map(([id, x, y], i) => { const isCause = (highlightOrderId === id) || (isCollapse && id === 'PED-137'); const esBuscado = id === buscado; return <div key={id} onClick={() => onPedido?.(id)} title={`${id} · destino (${x},${y})`} style={pos(x, y)} className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer transition hover:scale-125">
+      <div className={`size-3.5 rounded-full border-2 border-white shadow-md ${isCause ? 'animate-ping bg-red-600' : esBuscado ? 'animate-ping bg-blue-500' : ''}`} />
+      <div className={`absolute inset-0 size-3.5 rounded-full border-2 shadow-md ${esBuscado ? 'border-blue-700' : 'border-white'} ${isCause ? 'bg-red-600' : (incident && i === 3) ? 'bg-amber-500' : 'bg-emerald-600'}`} />
+      <span className={`mt-1 block whitespace-nowrap px-1 text-[10px] font-bold shadow-sm ${isCause ? 'bg-red-700 text-white' : esBuscado ? 'bg-blue-700 text-white' : 'bg-white/90 text-slate-700'}`}>{id}</span>
+      {isCause && <span className="mt-0.5 block whitespace-nowrap bg-red-50 px-1 text-[10px] font-bold text-red-700 shadow">Pedido causante del colapso</span>}
+    </div> })}
+
+    {/* Un pedido ya cerrado no se dibuja entre los abiertos; si es el buscado, se marca igual en su destino */}
+    {datos && objetivo && !datos.pedidos.some(pe => pe.codigo === objetivo.codigo) && <div title={`${objetivo.codigo} · ${ETIQUETA_ESTADO[objetivo.estado]}`} style={pos(objetivo.x, objetivo.y)} className="absolute z-[5] -translate-x-1/2 -translate-y-1/2">
+      <div className="relative size-3.5"><div className="absolute -inset-1.5 animate-ping rounded-full bg-blue-500/60" /><div className="relative size-3.5 rounded-full border-2 border-blue-700 bg-slate-400 shadow-md ring-2 ring-blue-500" /></div>
+      <span className="mt-1 block whitespace-nowrap bg-blue-700 px-1 text-[10px] font-bold text-white shadow-sm">{objetivo.codigo} · {ETIQUETA_ESTADO[objetivo.estado].toLowerCase()}</span>
+    </div>}
+
+    {incident && <div className="absolute left-[45%] top-[32%] bg-red-50 px-3 py-2 text-xs font-bold text-red-700 shadow"><AlertTriangle className="mr-1 inline size-4" />Incidencia detectada · Replanificación en proceso</div>}
+    {isCollapse && highlightOrderId && <div className={`absolute right-4 ${full ? 'top-16' : 'top-4'} bg-red-700 px-3 py-2 text-xs font-bold text-white shadow`}>Localizando {highlightOrderId} · (48,34) · fuera de plazo</div>}
+    <Leyenda full={full} real={!!datos} incident={incident || replanned || isCollapse} collapse={isCollapse} buscado={!!buscado} />
+  </div>
+}
+
+// Leyenda del mapa: explica cada símbolo que se dibuja; se puede recoger para ver el mapa completo
+function Leyenda({ full, real, incident, collapse, buscado }: { full: boolean; real: boolean; incident: boolean; collapse: boolean; buscado: boolean }) {
+  // En pantallas bajas (laptops) empieza recogida para no tapar el mapa
+  const [abierta, setAbierta] = useState(() => typeof window === 'undefined' || window.innerHeight >= 900)
+  const item = 'flex items-center gap-1.5'
+  const titulo = 'w-full text-[9px] font-bold uppercase tracking-wider text-slate-400'
+  const caja = `absolute z-[6] ${full ? 'bottom-9 right-4' : 'bottom-4 left-4'}`
+  if (!abierta) return <button onClick={() => setAbierta(true)} className={`${caja} border border-slate-200 bg-white/95 px-3 py-1.5 text-[11px] font-bold text-slate-700 shadow`}>Ver leyenda</button>
+  return <div className={`${caja} w-[560px] max-w-[calc(100%-2rem)] bg-white/95 px-3 py-2 text-[10px] font-semibold text-slate-700 shadow`}>
+    <div className="flex items-center justify-between gap-2"><span className="text-[11px] font-bold text-slate-800">Leyenda</span><button onClick={() => setAbierta(false)} aria-label="Ocultar leyenda" title="Ocultar leyenda" className="text-slate-400 hover:text-slate-700"><X className="size-3.5" /></button></div>
+    {full && <p className="mt-0.5 text-slate-500"><MapPin className="mr-1 inline size-3 text-blue-600" />Origen (0,0) abajo-izquierda · Cuadrícula 1 km · 70 × 50 km</p>}
+    <div className="mt-1.5 grid gap-x-4 gap-y-1.5 sm:grid-cols-2">
+      <div className="flex flex-wrap gap-x-3 gap-y-1">
+        <span className={titulo}>Almacenes</span>
+        <span className={item}><span className="inline-block size-3 border-2 border-white bg-blue-700 shadow" />Central · stock ilimitado</span>
+        <span className={item}><span className="inline-block size-3 border-2 border-white bg-slate-700 shadow" />Intermedio</span>
+        <span className={item}><span className="flex h-1.5 w-8 bg-white ring-1 ring-slate-300"><span className="h-full w-1/3 bg-emerald-600" /><span className="h-full w-1/3 bg-amber-500" /><span className="h-full w-1/3 bg-red-600" /></span>Stock disponible: verde ≥ {UMBRAL_STOCK.verde} % · ámbar · rojo &lt; {UMBRAL_STOCK.rojo} %</span>
+        {real && <span className={item}><b>N vehículos en base</b> = unidades estacionadas, sin ruta</span>}
+      </div>
+      <div className="flex flex-wrap gap-x-3 gap-y-1">
+        <span className={titulo}>Vehículos en ruta y su ruta (mismo color)</span>
+        {(Object.keys(ETIQUETA_TIPO) as TipoVehiculo[]).map(t => <span key={t} className={item}><span className={`inline-block size-3 rounded-full ${CLASE_TIPO[t]}`} /><span className="inline-block h-0.5 w-4" style={{ background: COLOR_TIPO[t] }} />{ETIQUETA_TIPO[t]}</span>)}
+        <span className={item}><span className="inline-block h-0 w-5 border-t-2 border-dashed border-slate-400" />{real ? 'Tramo ya recorrido' : 'Ruta anterior'}</span>
+      </div>
+      <div className="flex flex-wrap gap-x-3 gap-y-1">
+        <span className={titulo}>{real ? 'Pedidos abiertos · margen = fecha límite − llegada estimada' : 'Pedidos (destino del cliente)'}</span>
+        {real ? <>
+          <span className={item}><span className="inline-block size-3 rounded-full bg-emerald-600" />Holgado ≥ {UMBRALES_PEDIDO.verde} h</span>
+          <span className={item}><span className="inline-block size-3 rounded-full bg-amber-500" />Justo</span>
+          <span className={item}><span className="inline-block size-3 rounded-full bg-red-600" />Crítico &lt; {UMBRALES_PEDIDO.rojo} h</span>
+        </> : <>
+          <span className={item}><span className="inline-block size-3 rounded-full bg-emerald-600" />En plazo</span>
+          {incident && <span className={item}><span className="inline-block size-3 rounded-full bg-amber-500" />Afectado por la incidencia</span>}
+        </>}
+        {buscado && <span className={item}><span className="inline-block size-3 rounded-full border-2 border-blue-700 bg-white ring-2 ring-blue-500" />Pedido buscado</span>}
+      </div>
+      {(incident || collapse) && <div className="flex flex-wrap gap-x-3 gap-y-1">
+        <span className={titulo}>Incidencias</span>
+        {incident && <span className={`${item} text-red-700`}><span className="inline-block h-1 w-5 bg-red-600" />Tramo bloqueado</span>}
+        {collapse && <span className={`${item} text-red-700`}><span className="inline-block size-3 rounded-full bg-red-600" />Pedido causante del colapso</span>}
+      </div>}
+    </div>
+  </div>
+}
+
+// Buscador de pedidos por código (CU de consulta): resalta el pedido en el mapa y muestra su ficha
+function BuscarPedido({ rastreo, buscado, setBuscado, hora }: { rastreo: PedidoRastreo[]; buscado: string | null; setBuscado: (c: string | null) => void; hora: (h: number) => string }) {
+  const [texto, setTexto] = useState('')
+  const [lista, setLista] = useState(false)
+  const q = texto.trim().toLowerCase()
+  const coincidencias = q ? rastreo.filter(x => x.codigo.toLowerCase().includes(q)).slice(0, 8) : []
+  const ficha = buscado ? rastreo.find(x => x.codigo === buscado) ?? null : null
+  const elegir = (codigo: string) => { setBuscado(codigo); setTexto(codigo); setLista(false) }
+  const limpiar = () => { setTexto(''); setBuscado(null); setLista(false) }
+  return <div className="relative w-80 max-w-full text-xs">
+    <form role="search" onSubmit={e => { e.preventDefault(); const c = rastreo.find(x => x.codigo.toLowerCase() === q) ?? coincidencias[0]; if (c) elegir(c.codigo) }} className="flex items-center border border-slate-300 bg-white shadow focus-within:border-blue-600">
+      <Search className="ml-2.5 size-4 shrink-0 text-slate-400" />
+      <input value={texto} onChange={e => { setTexto(e.target.value); setLista(true) }} onFocus={() => setLista(true)} onKeyDown={e => { if (e.key === 'Escape') setLista(false) }} placeholder="Buscar pedido por código" aria-label="Buscar pedido por código" className="min-w-0 flex-1 px-2 py-2 outline-none" />
+      {(texto || buscado) && <button type="button" onClick={limpiar} aria-label="Limpiar búsqueda" title="Limpiar búsqueda" className="px-2 text-slate-400 hover:text-slate-700"><X className="size-4" /></button>}
+    </form>
+    {lista && q && ficha?.codigo !== texto && <ul role="listbox" className="absolute left-0 right-0 top-full z-20 mt-1 max-h-72 overflow-y-auto border border-slate-200 bg-white shadow-lg">
+      {coincidencias.length === 0 ? <li className="px-3 py-2 text-slate-500">No hay pedidos con «{texto.trim()}».</li> : coincidencias.map(c => <li key={c.id}><button type="button" onClick={() => elegir(c.codigo)} className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-blue-50"><b>{c.codigo}</b><span className="text-slate-500">{ETIQUETA_ESTADO[c.estado]}</span></button></li>)}
+    </ul>}
+    {ficha && <FichaPedido p={ficha} hora={hora} onCerrar={limpiar} />}
+    {buscado && !ficha && <p className="mt-1 border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">El pedido {buscado} ya no está en el escenario.</p>}
+  </div>
+}
+
+function FichaPedido({ p, hora, onCerrar }: { p: PedidoRastreo; hora: (h: number) => string; onCerrar: () => void }) {
+  const cerrado = p.estado === 'ENTREGADO' || p.estado === 'NO_ENTREGADO'
+  const plazo = Math.round(p.fechaLimiteH - p.horaIngresoH)
+  const tono = p.estado === 'NO_ENTREGADO' ? 'border-red-200 bg-red-50 text-red-700' : p.estado === 'ENTREGADO' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-blue-200 bg-blue-50 text-blue-700'
+  const filas: [string, ReactNode][] = [
+    ['Destino', `(${p.x}, ${p.y}) km · ${p.cantidad} u`],
+    ['Tipo', `${p.tipo === 'PRIORIZADO' ? 'Priorizado' : 'Regular'} · plazo ${plazo} h`],
+    ['Ingreso', hora(p.horaIngresoH)],
+    ['Fecha límite', hora(p.fechaLimiteH)],
+    ['Vehículo', p.vehiculoCodigo ? `${p.vehiculoCodigo}${p.tipoVehiculo ? ` · ${ETIQUETA_TIPO[p.tipoVehiculo]}` : ''}` : cerrado ? 'Su ruta ya terminó' : 'Sin asignar todavía'],
+    cerrado
+      ? ['Entrega', p.entregadoEnH != null ? `${hora(p.entregadoEnH)} · ${p.entregadoEnH <= p.fechaLimiteH ? 'a tiempo' : 'fuera de plazo'}` : 'Sin entregar']
+      : ['Llegada estimada', p.etaH != null ? hora(p.etaH) : 'Sin ruta asignada'],
+  ]
+  if (!cerrado && p.margenH != null) filas.push(['Margen', <span key="m" className={p.semaforo ? TEXTO_SEMAFORO[p.semaforo] : ''}>{p.margenH.toFixed(1)} h{p.semaforo ? ` · ${p.semaforo === 'verde' ? 'holgado' : p.semaforo === 'ambar' ? 'justo' : 'crítico'}` : ''}</span>])
+  return <div className="mt-1 border border-slate-200 bg-white p-3 shadow-lg">
+    <div className="flex items-start justify-between gap-2"><div><p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Ficha del pedido</p><p className="text-sm font-bold">{p.codigo}</p></div><span className={`border px-2 py-0.5 font-bold ${tono}`}>{ETIQUETA_ESTADO[p.estado]}</span></div>
+    <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">{filas.map(([a, b]) => <Fragment key={a}><dt className="text-slate-500">{a}</dt><dd className="font-semibold">{b}</dd></Fragment>)}</dl>
+    <button onClick={onCerrar} className="mt-2 border border-slate-300 bg-white px-2.5 py-1 font-bold text-slate-600">Quitar búsqueda</button>
+  </div>
+}
 
 function ScenarioSelect({ scenario, setScenario, setState, onStartFive }: { scenario: Scenario; setScenario: (s: Scenario) => void; setState: (s: ExecState) => void; onStartFive: (start: string) => Promise<void> }) {
   const [start, setStart] = useState('2026-09-08T08:00')
@@ -129,14 +306,14 @@ function ScenarioSelect({ scenario, setScenario, setState, onStartFive }: { scen
   </section>
 }
 
-function CollapseResults({ variant = 'collapse', onLocate, sim }: { variant?: 'five' | 'collapse' | 'day'; onLocate?: (id: string) => void; sim?: VistaSimulacion | null }) {
+function CollapseResults({ variant = 'collapse', onLocate, sim, segReal = 0 }: { variant?: 'five' | 'collapse' | 'day'; onLocate?: (id: string) => void; sim?: VistaSimulacion | null; segReal?: number }) {
   // Con una simulación del back-end se muestran sus conteos reales; sin ella, los valores de ejemplo del prototipo
   const c = sim?.pedidos
-  const periodo = sim && c ? [['Inicio del periodo', fechaHora(sim.fechaInicio)], ['Fin del periodo', fechaHora(sim.fechaFin)], ['Pedidos del periodo', String(c.incorporados)], ['Pedidos sin ruta factible', String(c.noEntregados)]] : [['Inicio del periodo','08/09/2026 · 08:00'],['Fin del periodo','13/09/2026 · 08:00'],['Pedidos del periodo','211'],['Duración real de la simulación','00:42:18']]
+  const periodo = sim && c ? [['Inicio del periodo', fechaHora(sim.fechaInicio)], ['Fin del periodo', fechaHora(sim.fechaFin)], ['Duración real de la simulación', duracion(segReal)], ['Pedidos del periodo', String(c.incorporados)]] : [['Inicio del periodo','08/09/2026 · 08:00'],['Fin del periodo','13/09/2026 · 08:00'],['Pedidos del periodo','211'],['Duración real de la simulación','00:42:18']]
   const indicadores = sim && c ? [['Entregados dentro del plazo', `${c.entregadosATiempo} · ${porcentaje(c.entregadosATiempo, c.incorporados)}`], ['Entregados fuera del plazo', `${c.entregados - c.entregadosATiempo} · ${porcentaje(c.entregados - c.entregadosATiempo, c.incorporados)}`], ['No entregados', `${c.noEntregados} · ${porcentaje(c.noEntregados, c.incorporados)}`], ['Pendientes o en ruta al cierre', `${c.abiertos} · ${porcentaje(c.abiertos, c.incorporados)}`]] : [['Entregados dentro del plazo','184 · 87%'],['Entregados fuera del plazo','16 · 8%'],['Pendientes','8 · 4%'],['En ruta','3 · 1%'],['Distancia total recorrida','4 680 km'],['Costo operativo total','S/ 18 930']]
   const title = variant === 'five' ? 'Resumen final · Simulación 5 días' : variant === 'day' ? 'Corte del día · Operación día a día (sin estado final)' : 'Resumen final · Colapso logístico'; const tone = variant === 'collapse' ? 'red' : 'slate'; return <section className={`border bg-white p-4 shadow-sm ${tone === 'red' ? 'border-red-200' : 'border-slate-200'}`}><div className={`flex flex-wrap items-center justify-between gap-2 border-b pb-3 ${tone === 'red' ? 'border-red-100' : 'border-slate-100'}`}><div><p className={`text-[10px] font-bold uppercase tracking-widest ${tone === 'red' ? 'text-red-700' : 'text-blue-700'}`}>Resultados finales · cantidad y % de cumplimiento</p><h3 className="mt-1 text-base font-bold">{title}</h3></div><span className={`border px-2.5 py-1 text-xs font-bold ${tone === 'red' ? 'border-red-200 bg-red-50 text-red-700' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>{variant === 'day' ? 'Corte operativo' : 'Estado final'}</span></div><div className="mt-4 grid gap-4"><div className="grid grid-cols-2 gap-2">{(variant === 'collapse' ? [['Instante del colapso','11/09/2026 · 16:42'],['Pedido causante','PED-137 · (48,34)'],['Plazo comprometido','11/09/2026 · 19:10'],['Estado del pedido','No entregable dentro del plazo']] : periodo).map(([label,value]) => <div key={label} className="border border-slate-100 bg-slate-50 px-3 py-2"><p className="text-[10px] text-slate-500">{label}</p><p className="mt-0.5 text-sm font-bold">{value}</p>{label === 'Pedido causante' && onLocate && <button onClick={() => onLocate('PED-137')} className="mt-2 border border-red-300 bg-white px-2.5 py-1.5 text-xs font-bold text-red-700">Localizar en mapa</button>}</div>)}</div><div><p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">Indicadores acumulados</p><div className="grid grid-cols-2 gap-2">{indicadores.map(([label,value]) => <div key={label} className="border border-slate-100 px-3 py-2"><p className="text-[10px] leading-tight text-slate-500">{label}</p><p className="mt-1 text-base font-bold">{value}</p></div>)}</div>{sim ? <p className="mt-4 text-[11px] text-slate-500">Distancia, costo y desglose por vehículo todavía no los expone el back-end.</p> : <><p className="mb-2 mt-4 text-[10px] font-bold uppercase tracking-wider text-slate-500">Desglose por tipo de vehículo</p><div className="grid grid-cols-3 gap-2">{[['Autos','2 410 km · S/ 9 840'],['Motos','1 520 km · S/ 5 920'],['Bicicletas','750 km · S/ 3 170']].map(([label,value]) => <div key={label} className="border border-slate-100 px-3 py-2"><p className="text-[10px] text-slate-500">{label}</p><p className="mt-1 text-sm font-bold">{value}</p></div>)}</div></>}</div></div></section> }
 
-function Operator({ scenario, setScenario, state, setState, replanned, setReplanned, sim, setSim, mapa }: { mapa: MapaDatos | null;  scenario: Scenario; setScenario: (s: Scenario) => void; state: ExecState; setState: (s: ExecState) => void; replanned: boolean; setReplanned: (r: boolean) => void; sim: VistaSimulacion | null; setSim: (s: VistaSimulacion | null) => void }) {
+function Operator({ scenario, setScenario, state, setState, replanned, setReplanned, sim, setSim, mapa, hora, segReal }: { mapa: MapaDatos | null; hora: (h: number) => string; segReal: number; scenario: Scenario; setScenario: (s: Scenario) => void; state: ExecState; setState: (s: ExecState) => void; replanned: boolean; setReplanned: (r: boolean) => void; sim: VistaSimulacion | null; setSim: (s: VistaSimulacion | null) => void }) {
   const [performance, setPerformance] = useState(false)
   const [warehouse, setWarehouse] = useState<string | null>(null)
   const [params, setParams] = useState(false)
@@ -149,6 +326,7 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
   const [faultUnit, setFaultUnit] = useState('')
   const [faultError, setFaultError] = useState('')
   const [highlightOrderId, setHighlightOrderId] = useState<string | null>(null)
+  const [buscado, setBuscado] = useState<string | null>(null)
   // En pantallas pequeñas el panel empieza recogido para no tapar el mapa
   const [panel, setPanel] = useState(() => typeof window === 'undefined' || window.innerWidth >= 768)
   const simActive = scenario !== 'day' && (state === 'running' || state === 'incident')
@@ -184,10 +362,11 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
   const field = 'mt-1 w-full border border-slate-200 bg-white px-2 py-1.5'
   return <div className="relative h-full">
     {/* El mapa ocupa todo el espacio libre; con el panel abierto se corre a su derecha (en pantallas medianas o más) */}
-    <div className={`absolute inset-y-0 right-0 ${panel ? 'left-0 md:left-[412px]' : 'left-0'}`}><Map full state={state} replanned={replanned} highlightOrderId={highlightOrderId} onWarehouse={openWarehouse} datos={mapa} /></div>
+    <div className={`absolute inset-y-0 right-0 ${panel ? 'left-0 md:left-[412px]' : 'left-0'}`}><Map full state={state} replanned={replanned} highlightOrderId={highlightOrderId} onWarehouse={openWarehouse} onPedido={setBuscado} datos={mapa} buscado={buscado} /></div>
 
     {/* Acciones sobre el mapa */}
-    <div className="absolute right-3 top-14 z-10 flex max-w-[calc(100%-1.5rem)] flex-wrap justify-end gap-2 md:top-3">
+    <div className="absolute right-3 top-14 z-10 flex max-w-[calc(100%-1.5rem)] flex-wrap items-start justify-end gap-2 md:top-3">
+      <BuscarPedido rastreo={mapa?.rastreo ?? DEMO_RASTREO} buscado={buscado} setBuscado={setBuscado} hora={hora} />
       <button onClick={() => { setParams(!params); setPanel(true) }} className={`${toolButton} ${params ? 'border-blue-600 text-blue-700' : 'border-slate-200'}`}><Settings2 className="mr-1 inline size-4" />Parámetros operativos</button>
       {!simFinished && <button onClick={() => setBreakdown(true)} className={`${toolButton} border-red-200 text-red-700`}><Wrench className="mr-1 inline size-4" />Registrar avería</button>}
       {state === 'running' && !replanned && <button onClick={() => { setReplanned(false); setState('incident') }} className={`${toolButton} border-red-200 text-red-700`}>Ver incidencia planificada</button>}
@@ -234,7 +413,7 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
           <button onClick={backToOperation} className="mt-2 border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700">Detener y volver a la operación en tiempo real</button>
         </div>}
         {simFinished && <>
-          <CollapseResults variant={scenario === 'collapse' ? 'collapse' : 'five'} sim={scenario === 'five' ? sim : null} onLocate={(id) => setHighlightOrderId(id)} />
+          <CollapseResults variant={scenario === 'collapse' ? 'collapse' : 'five'} sim={scenario === 'five' ? sim : null} segReal={segReal} onLocate={(id) => setHighlightOrderId(id)} />
           <button onClick={backToOperation} className="border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700">Cerrar simulación y volver a la operación en tiempo real</button>
         </>}
         {!simActive && !simFinished && state !== 'incident' && <ScenarioSelect scenario={scenario} setScenario={setScenario} setState={s => { setReplanned(false); setState(s) }} onStartFive={startFive} />}
@@ -245,9 +424,16 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
         {/* Al terminar, el resumen final reemplaza al panel de rendimiento */}
         <div className="flex flex-wrap gap-2">{!simFinished && <button onClick={() => setPerformance(!performance)} aria-expanded={performance} className="flex items-center gap-2 border border-slate-200 bg-white px-3 py-2 text-xs font-bold">Rendimiento <ChevronDown className={`size-4 ${performance ? 'rotate-180' : ''}`} /></button>}{['Almacén central', 'Nor-Oeste', 'Intermedio Este'].map(w => <button key={w} title={`Ver stock de ${w}`} onClick={() => warehouse === w ? setWarehouse(null) : openWarehouse(w)} className={`border px-3 py-2 text-xs font-bold ${warehouse === w ? 'border-blue-700 bg-blue-50 text-blue-800' : 'border-slate-200 bg-white'}`}>{w}</button>)}</div>
         {performance && !simFinished && <div className="grid gap-3 border border-slate-200 bg-white p-4 text-xs"><div><span className="text-slate-500">Cumplimiento</span><b className="block text-lg">184 · 87% dentro de plazo</b><span className="text-slate-600">16 · 8% fuera de plazo · 11 · 5% pendientes o en ruta</span></div><div className="grid grid-cols-2 gap-3"><div><span className="text-slate-500">Distancia recorrida</span><b className="block text-lg">4 680 km</b></div><div><span className="text-slate-500">Costo operativo</span><b className="block text-lg">S/ 18 930</b></div></div></div>}
-        {warehouse && <div id="panel-almacen" className="border border-blue-200 bg-blue-50 p-4 text-xs"><button onClick={() => setWarehouse(null)} className="float-right" aria-label="Cerrar panel de almacén"><X className="size-4" /></button><b className="text-sm">{warehouse}</b>{warehouse === 'Almacén central'
-          ? <p className="mt-2">Stock <b>ilimitado</b> (no usa semáforo) · 200 pedidos planificados · 24 unidades por salir.</p>
-          : <p className="mt-2">Stock: <b>680 de 1 000 unidades · 68 %</b> · <span className="font-bold text-emerald-700">● Verde</span> · 36 pedidos por arribar.</p>}</div>}
+        {warehouse && <div id="panel-almacen" className="border border-blue-200 bg-blue-50 p-4 text-xs"><button onClick={() => setWarehouse(null)} className="float-right" aria-label="Cerrar panel de almacén"><X className="size-4" /></button><b className="text-sm">{warehouse}</b>{(() => {
+          // Con datos del back-end: stock y unidades reales; sin ellos, los valores de ejemplo del prototipo
+          const a = mapa?.almacenes.find(x => (NOMBRE_ALMACEN[x.codigo] ?? x.codigo) === warehouse)
+          if (a) return a.pct == null
+            ? <p className="mt-2">Stock <b>ilimitado</b> (no usa semáforo) · {a.vehiculosEnBase} vehículos en base · ({a.x},{a.y}).</p>
+            : <p className="mt-2">Stock: <b>{(a.stock ?? 0).toLocaleString('es-PE')} de {(a.capacidad ?? 0).toLocaleString('es-PE')} unidades · {a.pct} %</b> · <span className={`font-bold ${TEXTO_SEMAFORO[tonoStock(a.pct)]}`}>● {{ verde: 'Verde', ambar: 'Ámbar', rojo: 'Rojo' }[tonoStock(a.pct)]}</span> · {a.vehiculosEnBase} vehículos en base · ({a.x},{a.y}).</p>
+          return warehouse === 'Almacén central'
+            ? <p className="mt-2">Stock <b>ilimitado</b> (no usa semáforo) · 200 pedidos planificados · 24 unidades por salir.</p>
+            : <p className="mt-2">Stock: <b>680 de 1 000 unidades · 68 %</b> · <span className="font-bold text-emerald-700">● Verde</span> · 36 pedidos por arribar.</p>
+        })()}</div>}
       </div>
     </aside> : <button onClick={() => setPanel(true)} className="absolute left-3 top-3 z-10 flex items-center gap-2 border border-slate-200 bg-white/95 px-3 py-2 text-xs font-bold shadow"><PanelLeftOpen className="size-4" />Panel de control</button>}
 
@@ -255,7 +441,8 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
   </div>
 }
 
-function Viewer({ state, setState, scenario, replanned, sim, mapa }: { state: ExecState; setState: (s: ExecState) => void; scenario: Scenario; replanned: boolean; sim: VistaSimulacion | null; mapa: MapaDatos | null }) {
+function Viewer({ state, setState, scenario, replanned, sim, mapa, hora, segReal }: { state: ExecState; setState: (s: ExecState) => void; scenario: Scenario; replanned: boolean; sim: VistaSimulacion | null; mapa: MapaDatos | null; hora: (h: number) => string; segReal: number }) {
+  const [buscado, setBuscado] = useState<string | null>(null)
   const disconnected = state === 'disconnected'
   // Si hay una simulación elegida pero sin iniciar, lo que está en ejecución es la operación en tiempo real
   const viewingDay = scenario === 'day' || state === 'idle'
@@ -264,9 +451,12 @@ function Viewer({ state, setState, scenario, replanned, sim, mapa }: { state: Ex
   const title = disconnected ? 'Solo consulta · desconectado' : shown === 'collapse' ? 'Colapso logístico' : shown === 'complete' ? 'Periodo completado' : shown === 'incident' ? 'Incidencia activa · replanificación en proceso' : 'Estado actual de la operación'
   const c = sim?.pedidos
   // Con una simulación real, los indicadores salen del back-end; sin ella, de la escena de demostración
-  const kpis = sim && c ? [['Fecha simulada', fechaHora(sim.fechaSimulada, true)], ['Avance del periodo', `${Math.round(sim.progreso * 100)}%`], ['Entregados a tiempo', `${c.entregadosATiempo} · ${porcentaje(c.entregadosATiempo, c.incorporados)}`], ['Pedidos abiertos', String(c.abiertos)], ['Vehículos en ruta', String(mapa?.resumen.vehiculosEnRuta ?? '—')], ['Costo del plan vigente', mapa?.resumen.costoPlan != null ? `S/ ${Math.round(mapa.resumen.costoPlan).toLocaleString('es-PE')}` : '—']] : mapa ? [['Hora simulada', horaSimulada(mapa.relojH)], ['Pedidos abiertos', String(mapa.resumen.pedidosAbiertos)], ['Vehículos en ruta', String(mapa.resumen.vehiculosEnRuta)], ['Algoritmo del plan', mapa.resumen.algoritmo ?? 'sin plan'], ['Costo del plan vigente', mapa.resumen.costoPlan != null ? `S/ ${Math.round(mapa.resumen.costoPlan).toLocaleString('es-PE')}` : '—'], ['Distancia del plan', mapa.resumen.distanciaPlanKm != null ? `${Math.round(mapa.resumen.distanciaPlanKm)} km` : '—']] : final ? [['Entregados dentro de plazo', '184 · 87%'], ['Fuera de plazo', '16 · 8%'], ['Pendientes / en ruta', '11 · 5%'], ['Distancia total', '4 680 km'], ['Costo total', 'S/ 18 930'], ['Duración real', '42:18']] : [['Pedidos entregados', '94%'], ['Pendientes', '8'], ['En ruta', '18'], ['Distancia', '2 940 km']]
+  const kpis = sim && c ? [['Fecha simulada', fechaHora(sim.fechaSimulada, true)], ['Tiempo real transcurrido', duracion(segReal)], ['Avance del periodo', `${Math.round(sim.progreso * 100)}%`], ['Pedidos ingresados', `${sim.simulacion.pedidosIncorporados} de ${sim.simulacion.pedidosProgramados}`], ['Entregados a tiempo', `${c.entregadosATiempo} · ${porcentaje(c.entregadosATiempo, c.incorporados)}`], ['Pedidos abiertos', String(c.abiertos)], ['Vehículos en ruta', String(mapa?.resumen.vehiculosEnRuta ?? '—')], ['Costo del plan vigente', mapa?.resumen.costoPlan != null ? `S/ ${Math.round(mapa.resumen.costoPlan).toLocaleString('es-PE')}` : '—']] : mapa ? [['Hora simulada', horaSimulada(mapa.relojH)], ['Pedidos abiertos', String(mapa.resumen.pedidosAbiertos)], ['Vehículos en ruta', String(mapa.resumen.vehiculosEnRuta)], ['Algoritmo del plan', mapa.resumen.algoritmo ?? 'sin plan'], ['Costo del plan vigente', mapa.resumen.costoPlan != null ? `S/ ${Math.round(mapa.resumen.costoPlan).toLocaleString('es-PE')}` : '—'], ['Distancia del plan', mapa.resumen.distanciaPlanKm != null ? `${Math.round(mapa.resumen.distanciaPlanKm)} km` : '—']] : final ? [['Entregados dentro de plazo', '184 · 87%'], ['Fuera de plazo', '16 · 8%'], ['Pendientes / en ruta', '11 · 5%'], ['Distancia total', '4 680 km'], ['Costo total', 'S/ 18 930'], ['Duración real', '42:18']] : [['Pedidos entregados', '94%'], ['Pendientes', '8'], ['En ruta', '18'], ['Distancia', '2 940 km']]
   return <div className="relative h-full">
-    <Map full replanned={replanned} state={shown} highlightOrderId={shown === 'collapse' && !mapa ? 'PED-137' : null} datos={mapa} />
+    <Map full replanned={replanned} state={shown} highlightOrderId={shown === 'collapse' && !mapa ? 'PED-137' : null} datos={mapa} buscado={buscado} onPedido={setBuscado} />
+
+    {/* Rastrear un pedido: el usuario de consulta busca por código y lo ve en el mapa */}
+    <div className="absolute right-3 top-3 z-10 max-w-[calc(100%-1.5rem)]"><BuscarPedido rastreo={mapa?.rastreo ?? DEMO_RASTREO} buscado={buscado} setBuscado={setBuscado} hora={hora} /></div>
 
     {/* Estado de la ejecución en curso, sobre el mapa */}
     <section className="absolute left-3 top-3 z-10 w-[380px] max-w-[calc(100%-1.5rem)] border border-slate-200 bg-white/95 p-4 shadow-lg">
@@ -326,6 +516,31 @@ export default function Home() {
     }, 2000)
     return () => clearInterval(t)
   }, [simId, simAlive])
+  // Tiempo real de ejecución: avanza con el reloj del navegador mientras la simulación está EJECUTANDO y se
+  // congela en pausa. Al engancharse a una simulación ya iniciada parte de lo que estima el reloj del back-end.
+  const [segReal, setSegReal] = useState(0)
+  const ancla = useRef<{ id: number; seg: number; t: number; corre: boolean } | null>(null)
+  const simEstado = sim?.simulacion.estado
+  useEffect(() => {
+    if (!sim) { ancla.current = null; setSegReal(0); return }
+    if (ancla.current?.id === sim.simulacion.escenarioId) return
+    ancla.current = { id: sim.simulacion.escenarioId, seg: tiempoReal(sim), t: Date.now(), corre: sim.simulacion.estado === 'EJECUTANDO' }
+    setSegReal(ancla.current.seg)
+  }, [sim])
+  useEffect(() => {
+    const a = ancla.current
+    if (!a) return
+    const corre = simEstado === 'EJECUTANDO'
+    if (a.corre && !corre) { a.seg += (Date.now() - a.t) / 1000; setSegReal(a.seg) }
+    if (!a.corre && corre) a.t = Date.now()
+    a.corre = corre
+    if (!corre) return
+    const t = setInterval(() => setSegReal(a.seg + (Date.now() - a.t) / 1000), 1000)
+    return () => clearInterval(t)
+  }, [simEstado, simId])
+  // Horas del escenario: con simulación, como fecha de calendario; si no, como día y hora del reloj
+  const fechaBase = sim?.simulacion.fechaBase
+  const hora = useMemo(() => fechaBase ? (h: number) => fechaDesdeBase(fechaBase, h) : horaSimulada, [fechaBase])
   const effectiveState: ExecState = state === 'idle' && (scenario === 'day' || role === 'visualizador') ? 'running' : state
   // Traza de depuración (solo en desarrollo): se ve en la consola del navegador (F12 → Consola).
   useEffect(() => {
@@ -342,14 +557,14 @@ export default function Home() {
   }, [role, scenario, effectiveState, replanned])
   // Operador y visualizador trabajan sobre el mapa a pantalla completa; el registrador es un formulario.
   return <main className="flex h-dvh flex-col overflow-hidden bg-white font-sans text-slate-900">
-    <Header scenario={scenario} state={effectiveState} replanned={replanned} sim={sim} escenario={mapa && escenarioMapa != null ? { id: escenarioMapa, relojH: mapa.relojH } : null} />
+    <Header scenario={scenario} state={effectiveState} replanned={replanned} sim={sim} segReal={segReal} escenario={mapa && escenarioMapa != null ? { id: escenarioMapa, relojH: mapa.relojH } : null} />
     <Nav role={role} setRole={setRole} />
     {role === 'registrador'
       ? <div className="min-h-0 flex-1 overflow-y-auto bg-[#f3f5f6] p-5 md:p-7"><div className="mx-auto max-w-[1500px]"><Registrar orders={orders} setOrders={setOrders} /></div></div>
       : <div className="relative min-h-0 flex-1">
           {mapaError && <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 shadow">Mapa sin actualizar: {mapaError}</div>}
-          {role === 'operador' && <Operator mapa={mapa} scenario={scenario} setScenario={setScenario} state={scenario === 'day' ? effectiveState : state} setState={setState} replanned={replanned} setReplanned={setReplanned} sim={sim} setSim={setSim} />}
-          {role === 'visualizador' && <Viewer sim={sim} mapa={mapa} scenario={scenario} state={effectiveState} setState={setState} replanned={replanned} />}
+          {role === 'operador' && <Operator mapa={mapa} hora={hora} segReal={segReal} scenario={scenario} setScenario={setScenario} state={scenario === 'day' ? effectiveState : state} setState={setState} replanned={replanned} setReplanned={setReplanned} sim={sim} setSim={setSim} />}
+          {role === 'visualizador' && <Viewer sim={sim} mapa={mapa} hora={hora} segReal={segReal} scenario={scenario} state={effectiveState} setState={setState} replanned={replanned} />}
         </div>}
   </main>
 }

@@ -44,14 +44,27 @@ export async function consultarPlan(escenarioId: number): Promise<PlanDistribuci
 
 export type Semaforo = 'verde' | 'ambar' | 'rojo'
 
+/** Ficha de un pedido para buscarlo o rastrearlo, esté abierto o ya cerrado. */
+export interface PedidoRastreo {
+  id: number; codigo: string; x: number; y: number; cantidad: number; tipo: 'REGULAR' | 'PRIORIZADO'; estado: EstadoPedido
+  horaIngresoH: number; fechaLimiteH: number; entregadoEnH: number | null
+  /** Llegada estimada según el plan vigente (null si ninguna ruta lo lleva). */
+  etaH: number | null
+  vehiculoId: number | null; vehiculoCodigo: string | null; tipoVehiculo: TipoVehiculo | null
+  margenH: number | null; semaforo: Semaforo | null
+}
+
 export interface MapaDatos {
   relojH: number
-  almacenes: (AlmacenFisico & { vehiculosEnBase: number })[]
+  /** pct: stock disponible en % de la capacidad; null en el almacén central (ilimitado). */
+  almacenes: (AlmacenFisico & { vehiculosEnBase: number; pct: number | null })[]
   /** Solo los vehículos que están recorriendo una ruta en este instante. */
   vehiculos: { id: number; codigo: string; tipo: TipoVehiculo; x: number; y: number; carga: number; capacidad: number }[]
   rutas: { id: number; vehiculoId: number; tipo: TipoVehiculo; puntos: [number, number][]; recorrido: [number, number][] }[]
   /** Pedidos aún no entregados, con su semáforo de margen (fecha límite − ETA). */
   pedidos: { id: number; codigo: string; x: number; y: number; cantidad: number; estado: EstadoPedido; semaforo: Semaforo; margenH: number | null }[]
+  /** Todos los pedidos del escenario, para el buscador. */
+  rastreo: PedidoRastreo[]
   resumen: { pedidosAbiertos: number; vehiculosEnRuta: number; costoPlan: number | null; distanciaPlanKm: number | null; algoritmo: string | null }
 }
 
@@ -78,9 +91,12 @@ export function datosMapa(estado: EstadoOperacion, plan: PlanDistribucion | null
   const reloj = estado.fisico?.relojH ?? estado.relojH
   const fisicos = estado.fisico?.vehiculos ?? []
   const rutasActivas = (plan?.rutas ?? []).filter(r => r.trazado.length > 1 && r.horaFinH >= reloj)
-  const enRuta = new Set(rutasActivas.filter(r => r.horaInicioH <= reloj).map(r => r.vehiculoId))
+  // Viaje en curso de cada vehículo: una unidad puede tener varios viajes seguidos en el plan
+  const enCurso = new globalThis.Map<number, RutaPlan>()
+  for (const r of rutasActivas) if (r.horaInicioH <= reloj && (enCurso.get(r.vehiculoId)?.horaInicioH ?? -Infinity) < r.horaInicioH) enCurso.set(r.vehiculoId, r)
+  const enRuta = new Set(enCurso.keys())
 
-  const vehiculos = rutasActivas.filter(r => enRuta.has(r.vehiculoId)).map(r => {
+  const vehiculos = [...enCurso.values()].map(r => {
     const f = fisicos.find(v => v.id === r.vehiculoId)
     const p = posicionEn(r.trazado, reloj)
     return { id: r.vehiculoId, codigo: f?.codigo ?? `V-${r.vehiculoId}`, tipo: r.tipoVehiculo, x: p.x, y: p.y, carga: f?.carga ?? r.cargaTotal, capacidad: f?.capacidad ?? r.cargaTotal }
@@ -94,19 +110,43 @@ export function datosMapa(estado: EstadoOperacion, plan: PlanDistribucion | null
     return { id: r.id, vehiculoId: r.vehiculoId, tipo: r.tipoVehiculo, puntos, recorrido }
   })
 
+  // Qué ruta lleva cada pedido y cuándo llega su última parte (un pedido puede repartirse en varias paradas)
   const eta = new globalThis.Map<number, number>()
-  for (const r of plan?.rutas ?? []) for (const s of r.paradas) if (!s.entregado) eta.set(s.pedidoId, Math.max(eta.get(s.pedidoId) ?? 0, s.etaH))
+  const lleva = new globalThis.Map<number, RutaPlan>()
+  for (const r of plan?.rutas ?? []) for (const s of r.paradas) {
+    lleva.set(s.pedidoId, r)
+    if (!s.entregado) eta.set(s.pedidoId, Math.max(eta.get(s.pedidoId) ?? 0, s.etaH))
+  }
+  // El back-end deja PENDIENTE hasta la entrega; si una ruta del plan ya lo lleva, se muestra como asignado
+  const estadoVisto = (p: Pedido): EstadoPedido => p.estado === 'PENDIENTE' && lleva.has(p.id) ? 'ASIGNADO' : p.estado
   const abiertos = pedidos.filter(p => p.estado !== 'ENTREGADO' && p.estado !== 'NO_ENTREGADO')
   const marcas = abiertos.map(p => {
     const llegada = eta.get(p.id)
     const margen = llegada != null ? p.fechaLimiteH - llegada : p.fechaLimiteH - reloj
-    return { id: p.id, codigo: p.codigo, x: p.posX, y: p.posY, cantidad: p.cantidad, estado: p.estado, semaforo: semaforo(margen), margenH: margen }
+    return { id: p.id, codigo: p.codigo, x: p.posX, y: p.posY, cantidad: p.cantidad, estado: estadoVisto(p), semaforo: semaforo(margen), margenH: margen }
   })
 
-  const almacenes = (estado.fisico?.almacenes ?? []).map(a => ({ ...a, vehiculosEnBase: fisicos.filter(v => v.almacenBaseId === a.id && !enRuta.has(v.id)).length }))
+  const cerrado = (p: Pedido) => p.estado === 'ENTREGADO' || p.estado === 'NO_ENTREGADO'
+  const rastreo = pedidos.map(p => {
+    const r = lleva.get(p.id)
+    const llegada = cerrado(p) ? null : eta.get(p.id) ?? null
+    const margen = cerrado(p) ? (p.entregadoEnH != null ? p.fechaLimiteH - p.entregadoEnH : null) : llegada != null ? p.fechaLimiteH - llegada : p.fechaLimiteH - reloj
+    return {
+      id: p.id, codigo: p.codigo, x: p.posX, y: p.posY, cantidad: p.cantidad, tipo: p.tipo, estado: estadoVisto(p),
+      horaIngresoH: p.horaIngresoH, fechaLimiteH: p.fechaLimiteH, entregadoEnH: p.entregadoEnH, etaH: llegada,
+      vehiculoId: r?.vehiculoId ?? null, vehiculoCodigo: r ? fisicos.find(v => v.id === r.vehiculoId)?.codigo ?? `V-${r.vehiculoId}` : null, tipoVehiculo: r?.tipoVehiculo ?? null,
+      margenH: margen, semaforo: cerrado(p) ? null : semaforo(margen),
+    }
+  })
+
+  const almacenes = (estado.fisico?.almacenes ?? []).map(a => ({
+    ...a,
+    vehiculosEnBase: fisicos.filter(v => v.almacenBaseId === a.id && !enRuta.has(v.id)).length,
+    pct: a.central || !a.capacidad ? null : Math.round((a.stock ?? 0) / a.capacidad * 100),
+  }))
 
   return {
-    relojH: reloj, almacenes, vehiculos, rutas, pedidos: marcas,
+    relojH: reloj, almacenes, vehiculos, rutas, pedidos: marcas, rastreo,
     resumen: { pedidosAbiertos: abiertos.length, vehiculosEnRuta: vehiculos.length, costoPlan: plan?.costoTotal ?? null, distanciaPlanKm: plan?.distanciaTotalKm ?? null, algoritmo: plan?.algoritmo ?? null },
   }
 }
