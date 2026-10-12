@@ -26,9 +26,13 @@ export interface PlanDistribucion { id: number; version: number; algoritmo: stri
 export type EstadoPedido = 'PENDIENTE' | 'ASIGNADO' | 'EN_RUTA' | 'ENTREGADO' | 'NO_ENTREGADO'
 export interface Pedido { id: number; codigo: string; posX: number; posY: number; cantidad: number; tipo: 'REGULAR' | 'PRIORIZADO'; horaIngresoH: number; fechaLimiteH: number; estado: EstadoPedido; entregadoEnH: number | null }
 
+export interface Tramo { x1: number; y1: number; x2: number; y2: number }
+export interface Incidencia { id: number; escenarioId: number; tipo: 'BLOQUEO' | 'AVERIA'; instanteH: number; finH: number | null; vehiculoId: number | null; activa: boolean; descripcion: string | null; tramos: Tramo[] }
+
 export const consultarEstado = (escenarioId: number) => pedir<EstadoOperacion>(`/api/escenarios/${escenarioId}/estado`)
 export const consultarPedidos = (escenarioId: number) => pedir<Pedido[]>(`/api/escenarios/${escenarioId}/pedidos`)
 export const listarSimulaciones = () => pedir<VistaSimulacion[]>('/api/simulaciones')
+export const incidenciasVigentes = (escenarioId: number) => pedir<Incidencia[]>(`/api/escenarios/${escenarioId}/incidencias/vigentes`)
 
 /** Plan vigente; antes de la primera planificación el back-end responde 404 y aquí se devuelve null. */
 export async function consultarPlan(escenarioId: number): Promise<PlanDistribucion | null> {
@@ -65,6 +69,10 @@ export interface MapaDatos {
   pedidos: { id: number; codigo: string; x: number; y: number; cantidad: number; estado: EstadoPedido; semaforo: Semaforo; margenH: number | null }[]
   /** Todos los pedidos del escenario, para el buscador. */
   rastreo: PedidoRastreo[]
+  /** Toda la flota del escenario (para elegir la unidad de una avería). */
+  flota: { id: number; codigo: string; tipo: TipoVehiculo; disponible: boolean; enRuta: boolean; averiada: boolean }[]
+  /** Incidencias vigentes en el reloj actual. */
+  incidencias: Incidencia[]
   resumen: { pedidosAbiertos: number; vehiculosEnRuta: number; costoPlan: number | null; distanciaPlanKm: number | null; algoritmo: string | null }
 }
 
@@ -87,7 +95,7 @@ function posicionEn(trazado: PuntoTrazado[], t: number): { x: number; y: number;
   return { x: u.x, y: u.y, indice: trazado.length - 1 }
 }
 
-export function datosMapa(estado: EstadoOperacion, plan: PlanDistribucion | null, pedidos: Pedido[]): MapaDatos {
+export function datosMapa(estado: EstadoOperacion, plan: PlanDistribucion | null, pedidos: Pedido[], incidencias: Incidencia[] = []): MapaDatos {
   const reloj = estado.fisico?.relojH ?? estado.relojH
   const fisicos = estado.fisico?.vehiculos ?? []
   const rutasActivas = (plan?.rutas ?? []).filter(r => r.trazado.length > 1 && r.horaFinH >= reloj)
@@ -145,14 +153,75 @@ export function datosMapa(estado: EstadoOperacion, plan: PlanDistribucion | null
     pct: a.central || !a.capacidad ? null : Math.round((a.stock ?? 0) / a.capacidad * 100),
   }))
 
+  const averiadas = new Set(incidencias.filter(i => i.tipo === 'AVERIA').map(i => i.vehiculoId))
+  const flota = fisicos.map(v => ({ id: v.id, codigo: v.codigo, tipo: v.tipo, disponible: v.disponible, enRuta: enRuta.has(v.id), averiada: averiadas.has(v.id) }))
+
   return {
-    relojH: reloj, almacenes, vehiculos, rutas, pedidos: marcas, rastreo,
+    relojH: reloj, almacenes, vehiculos, rutas, pedidos: marcas, rastreo, flota, incidencias,
     resumen: { pedidosAbiertos: abiertos.length, vehiculosEnRuta: vehiculos.length, costoPlan: plan?.costoTotal ?? null, distanciaPlanKm: plan?.distanciaTotalKm ?? null, algoritmo: plan?.algoritmo ?? null },
   }
 }
 
 /** Una vuelta de consulta: estado, plan y pedidos del escenario, ya listos para dibujar. */
 export async function consultarMapa(escenarioId: number): Promise<MapaDatos> {
-  const [estado, plan, pedidos] = await Promise.all([consultarEstado(escenarioId), consultarPlan(escenarioId), consultarPedidos(escenarioId)])
-  return datosMapa(estado, plan, pedidos)
+  const [estado, plan, pedidos, incidencias] = await Promise.all([consultarEstado(escenarioId), consultarPlan(escenarioId), consultarPedidos(escenarioId), incidenciasVigentes(escenarioId).catch(() => [])])
+  return datosMapa(estado, plan, pedidos, incidencias)
 }
+
+// ---------------------------------------------------------------------------
+// Registro desde la interfaz: pedidos, averías y bloqueos (README del back-end, §5 y §6)
+// El instante lo pone el sistema: es el reloj del escenario al confirmar, no lo elige el usuario.
+// ---------------------------------------------------------------------------
+
+const json = (cuerpo: unknown): RequestInit => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) })
+/** Reloj del escenario tal cual lo da el back-end: redondearlo puede dejarlo un instante en el pasado, que el back-end rechaza. */
+const relojActual = async (escenarioId: number) => (await consultarEstado(escenarioId)).relojH
+/** Código corto y único, p. ej. «REG-MGX3K2»: el back-end exige código por pedido y por cliente. */
+const codigoNuevo = (prefijo: string) => `${prefijo}-${Date.now().toString(36).toUpperCase()}`
+
+interface Cliente { id: number; codigo: string; nombre: string }
+
+/** Cliente con ese nombre (sin distinguir mayúsculas); si no existe, se da de alta con el punto de entrega. */
+async function clientePorNombre(nombre: string, x: number, y: number): Promise<Cliente> {
+  const r = await pedir<{ datos: Cliente[] }>(`/api/clientes?busqueda=${encodeURIComponent(nombre)}&limite=20`)
+  const igual = r.datos.find(c => c.nombre.trim().toLowerCase() === nombre.trim().toLowerCase())
+  return igual ?? pedir<Cliente>('/api/clientes', json({ codigo: codigoNuevo('CLI'), nombre: nombre.trim(), posX: x, posY: y }))
+}
+
+export interface NuevoPedido { cliente: string; x: number; y: number; cantidad: number; tipo: 'REGULAR' | 'PRIORIZADO'; plazoHoras: number }
+
+/** Registra el pedido con hora de ingreso = reloj actual del escenario; el plazo fija su fecha límite. */
+export async function registrarPedido(escenarioId: number, p: NuevoPedido): Promise<Pedido> {
+  const [cliente, horaIngresoH] = await Promise.all([clientePorNombre(p.cliente, p.x, p.y), relojActual(escenarioId)])
+  return pedir<Pedido>(`/api/escenarios/${escenarioId}/pedidos`, json({ codigo: codigoNuevo('REG'), clienteId: cliente.id, posX: p.x, posY: p.y, cantidad: p.cantidad, tipo: p.tipo, plazoHoras: p.plazoHoras, horaIngresoH }))
+}
+
+/** El reloj puede avanzar entre la lectura y el registro; si el back-end lo rechaza por «pasado», se reintenta una vez. */
+async function enElReloj<T>(escenarioId: number, registrar: (relojH: number) => Promise<T>): Promise<T> {
+  try { return await registrar(await relojActual(escenarioId)) } catch (e) {
+    if (e instanceof Error && /pasado/.test(e.message)) return registrar(await relojActual(escenarioId))
+    throw e
+  }
+}
+
+/** Avería de una unidad: queda fuera de la flota disponible y el escenario pide replanificar. */
+export const registrarAveria = (escenarioId: number, vehiculoId: number, descripcion: string) =>
+  enElReloj(escenarioId, instanteH => pedir<Incidencia>(`/api/escenarios/${escenarioId}/incidencias/averias`, json({ vehiculoId, instanteH, descripcion })))
+
+/** Tramos de 1 km entre dos nodos de una misma calle (misma x o misma y), de un extremo al otro. */
+export function tramosEntre(x1: number, y1: number, x2: number, y2: number): Tramo[] {
+  if (x1 !== x2 && y1 !== y2) throw new Error('El bloqueo debe seguir una sola calle: misma X o misma Y en ambos extremos.')
+  if (x1 === x2 && y1 === y2) throw new Error('Los dos extremos del bloqueo son el mismo punto.')
+  const tramos: Tramo[] = []
+  if (x1 === x2) for (let y = Math.min(y1, y2); y < Math.max(y1, y2); y++) tramos.push({ x1, y1: y, x2: x1, y2: y + 1 })
+  else for (let x = Math.min(x1, x2); x < Math.max(x1, x2); x++) tramos.push({ x1: x, y1, x2: x + 1, y2: y1 })
+  return tramos
+}
+
+/** Bloqueo vial desde el reloj actual y durante las horas indicadas. */
+export const registrarBloqueo = (escenarioId: number, tramos: Tramo[], duracionH: number, descripcion: string) =>
+  enElReloj(escenarioId, instanteH => pedir<Incidencia>(`/api/escenarios/${escenarioId}/incidencias/bloqueos`, json({ instanteH, finH: instanteH + duracionH, descripcion, tramos })))
+
+/** Levanta la incidencia en el reloj actual: el tramo se libera o la unidad vuelve a estar operativa. */
+export const levantarIncidencia = (escenarioId: number, incidenciaId: number) =>
+  pedir<void>(`/api/escenarios/${escenarioId}/incidencias/${incidenciaId}`, { method: 'DELETE' })

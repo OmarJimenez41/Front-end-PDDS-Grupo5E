@@ -2,7 +2,7 @@
 
 import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Bike, Car, Check, ChevronDown, ChevronLeft, FileText, MapPin, Navigation, Package, PanelLeftOpen, Search, Settings2, Truck, Warehouse, Wrench, X } from 'lucide-react'
-import { type EstadoPedido, type MapaDatos, type PedidoRastreo, type TipoVehiculo, UMBRALES_PEDIDO, consultarMapa, listarSimulaciones } from '@/lib/api/operacion'
+import { type EstadoPedido, type MapaDatos, type PedidoRastreo, type TipoVehiculo, type Tramo, UMBRALES_PEDIDO, consultarMapa, levantarIncidencia, listarSimulaciones, registrarAveria, registrarBloqueo, registrarPedido, tramosEntre } from '@/lib/api/operacion'
 import { type Cobertura, type VistaSimulacion, consultarSimulacion, detenerSimulacion, iniciarCincoDias, mensajeError, pausarSimulacion, reanudarSimulacion, validarCobertura } from '@/lib/api/simulacion'
 
 type Role = 'registrador' | 'operador' | 'visualizador'
@@ -53,7 +53,73 @@ function Nav({ role, setRole }: { role: Role; setRole: (r: Role) => void }) { re
 // Reloj del prototipo: los pedidos se registran el 08/09/2026 a las 08:35; la fecha límite es ingreso + plazo
 const deadlineFrom = (hours: number) => { const d = new Date(2026, 8, 8, 8 + hours, 35); const p = (n: number) => String(n).padStart(2, '0'); return `${p(d.getDate())}/${p(d.getMonth() + 1)} · ${p(d.getHours())}:${p(d.getMinutes())}` }
 
-function Registrar({ orders, setOrders }: { orders: Order[]; setOrders: (o: Order[]) => void }) { const [form, setForm] = useState({ customer: '', x: '', y: '', units: '', delivery: 'Regular' as 'Regular' | 'Priorizada', hours: '36' }); const [message, setMessage] = useState(''); const update = (key: string, value: string) => setForm(f => ({ ...f, [key]: value, ...(key === 'delivery' ? { hours: value === 'Regular' ? '36' : f.hours === '36' ? '4' : f.hours } : {}) })); const submit = () => { if (!form.customer || !form.x || !form.y || !form.units) return setMessage('Completa cliente, coordenadas y unidades.'); const x = Number(form.x); const y = Number(form.y); const u = Number(form.units); if (!Number.isFinite(x) || x < 0 || x > 70) return setMessage('X debe estar entre 0 y 70 km (necesario para planificación).'); if (!Number.isFinite(y) || y < 0 || y > 50) return setMessage('Y debe estar entre 0 y 50 km (necesario para planificación).'); if (!Number.isInteger(u) || u <= 0) return setMessage('Unidades debe ser entero mayor a 0 (necesario para planificación).'); if (form.delivery === 'Priorizada' && !['4','8','12','18'].includes(form.hours)) return setMessage('Priorizada requiere plazo 4/8/12/18 h.'); const id = `PED-${String(orders.length + 1).padStart(3, '0')}`; setOrders([...orders, { ...form, id, entered: '08/09 · 08:35', deadline: deadlineFrom(Number(form.hours)) }]); setForm({ customer: '', x: '', y: '', units: '', delivery: 'Regular', hours: '36' }); setMessage('Pedido registrado correctamente.'); }; return <div className="flex flex-col gap-5"><section className="border border-slate-200 bg-white p-5 shadow-sm"><p className="text-[10px] font-bold uppercase tracking-widest text-blue-600">Registrador de pedidos</p><h2 className="mt-1 text-lg font-bold">Registro de operación día a día</h2><p className="mt-1 text-xs text-slate-500">La fecha y hora de ingreso se asignan automáticamente al confirmar.</p><div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><label className="flex flex-col gap-2 text-xs font-semibold text-slate-600">Cliente<input value={form.customer} onChange={e => update('customer', e.target.value)} className="border border-slate-200 px-3 py-2.5 text-sm font-normal" placeholder="Nombre completo" /></label><label className="flex flex-col gap-2 text-xs font-semibold text-slate-600">Coordenada X<input type="number" value={form.x} onChange={e => update('x', e.target.value)} className="border border-slate-200 px-3 py-2.5 text-sm font-normal" placeholder="0–70 km" /></label><label className="flex flex-col gap-2 text-xs font-semibold text-slate-600">Coordenada Y<input type="number" value={form.y} onChange={e => update('y', e.target.value)} className="border border-slate-200 px-3 py-2.5 text-sm font-normal" placeholder="0–50 km" /></label><label className="flex flex-col gap-2 text-xs font-semibold text-slate-600">Unidades de producto P<input type="number" value={form.units} onChange={e => update('units', e.target.value)} className="border border-slate-200 px-3 py-2.5 text-sm font-normal" /></label><label className="flex flex-col gap-2 text-xs font-semibold text-slate-600">Tipo de entrega<select value={form.delivery} onChange={e => update('delivery', e.target.value)} className="border border-slate-200 px-3 py-2.5 text-sm"><option>Regular</option><option>Priorizada</option></select></label>{form.delivery === 'Priorizada' ? <label className="flex flex-col gap-2 text-xs font-semibold text-slate-600">Plazo<select value={form.hours} onChange={e => update('hours', e.target.value)} className="border border-slate-200 px-3 py-2.5 text-sm"><option value="4">4 horas</option><option value="8">8 horas</option><option value="12">12 horas</option><option value="18">18 horas</option></select></label> : <div className="flex flex-col justify-end gap-2 text-xs font-semibold text-slate-600"><span>Plazo automático</span><div className="border border-slate-100 bg-slate-50 px-3 py-2.5 text-sm">36 horas</div></div>}</div><div className="mt-5 flex items-center gap-3"><button onClick={submit} className="bg-blue-700 px-5 py-2.5 text-sm font-bold text-white">Registrar pedido</button>{message && <span className="text-xs font-semibold text-slate-500">{message}</span>}</div></section><section className="border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center justify-between"><div><p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Pedidos registrados</p><h2 className="mt-1 text-lg font-bold">Cola de pedidos ({orders.length})</h2></div><Package className="size-5 text-slate-400" /></div><div className="mt-4 overflow-x-auto"><table className="w-full min-w-[900px] text-left text-xs"><thead className="border-y border-slate-200 text-[10px] uppercase tracking-wider text-slate-400"><tr>{['ID', 'Cliente', 'Coordenadas', 'Unidades', 'Entrega', 'Ingreso', 'Fecha/hora límite'].map(h => <th key={h} className="px-3 py-3">{h}</th>)}</tr></thead><tbody>{orders.map(o => <tr key={o.id} className="border-b border-slate-100"><td className="px-3 py-3 font-bold">{o.id}</td><td className="px-3 py-3">{o.customer}</td><td className="px-3 py-3">({o.x}, {o.y}) km</td><td className="px-3 py-3">{o.units}</td><td className="px-3 py-3">{o.delivery} · {o.hours} h</td><td className="px-3 py-3 text-slate-500">{o.entered}</td><td className="px-3 py-3 text-slate-500">{o.deadline}</td></tr>)}</tbody></table></div></section></div> }
+// Registro de pedidos. Con un escenario en curso en el back-end, el pedido entra en él (hora de ingreso = reloj del
+// escenario) y la cola muestra los pedidos reales; sin back-end, se guarda solo en esta pantalla como en el prototipo.
+function Registrar({ orders, setOrders, escenarioId, rastreo, hora, onRegistrado }: { orders: Order[]; setOrders: (o: Order[]) => void; escenarioId: number | null; rastreo: PedidoRastreo[] | null; hora: (h: number) => string; onRegistrado: () => void }) {
+  const vacio = { customer: '', x: '', y: '', units: '', delivery: 'Regular' as 'Regular' | 'Priorizada', hours: '36' }
+  const [form, setForm] = useState(vacio)
+  const [message, setMessage] = useState<{ ok: boolean; texto: string } | null>(null)
+  const [enviando, setEnviando] = useState(false)
+  const real = escenarioId != null
+  const update = (key: string, value: string) => setForm(f => ({ ...f, [key]: value, ...(key === 'delivery' ? { hours: value === 'Regular' ? '36' : f.hours === '36' ? '4' : f.hours } : {}) }))
+  const error = (texto: string) => setMessage({ ok: false, texto })
+  const submit = async () => {
+    if (!form.customer.trim() || !form.x || !form.y || !form.units) return error('Completa cliente, coordenadas y unidades.')
+    const x = Number(form.x), y = Number(form.y), u = Number(form.units)
+    if (!Number.isInteger(x) || x < 0 || x > 70) return error('X debe ser un número entero entre 0 y 70 km.')
+    if (!Number.isInteger(y) || y < 0 || y > 50) return error('Y debe ser un número entero entre 0 y 50 km.')
+    if (!Number.isInteger(u) || u <= 0) return error('Las unidades deben ser un número entero mayor que 0.')
+    if (form.delivery === 'Priorizada' && !['4', '8', '12', '18'].includes(form.hours)) return error('Un pedido priorizado tiene plazo de 4, 8, 12 o 18 h.')
+    if (!real) {
+      const id = `PED-${String(orders.length + 1).padStart(3, '0')}`
+      setOrders([...orders, { ...form, id, entered: '08/09 · 08:35', deadline: deadlineFrom(Number(form.hours)) }])
+      setForm(vacio); setMessage({ ok: true, texto: `Pedido ${id} registrado (solo en esta pantalla).` })
+      return
+    }
+    setEnviando(true); setMessage(null)
+    try {
+      const p = await registrarPedido(escenarioId, { cliente: form.customer, x, y, cantidad: u, tipo: form.delivery === 'Regular' ? 'REGULAR' : 'PRIORIZADO', plazoHoras: Number(form.hours) })
+      setForm(vacio); setMessage({ ok: true, texto: `Pedido ${p.codigo} registrado · ingreso ${hora(p.horaIngresoH)} · fecha límite ${hora(p.fechaLimiteH)}. Entra en el siguiente plan.` })
+      onRegistrado()
+    } catch (e) { error(mensajeError(e)) } finally { setEnviando(false) }
+  }
+  const label = 'flex flex-col gap-2 text-xs font-semibold text-slate-600'
+  const input = 'border border-slate-200 px-3 py-2.5 text-sm font-normal'
+  // Cola: pedidos reales del escenario (los más recientes primero) o los de ejemplo del prototipo
+  const cola = rastreo ? [...rastreo].sort((a, b) => b.horaIngresoH - a.horaIngresoH) : null
+  return <div className="flex flex-col gap-5">
+    <section className="border border-slate-200 bg-white p-5 shadow-sm">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-blue-600">Registrador de pedidos</p>
+      <h2 className="mt-1 text-lg font-bold">Registro de operación día a día</h2>
+      <p className="mt-1 text-xs text-slate-500">La fecha y hora de ingreso se asignan automáticamente al confirmar.</p>
+      {!real && <p className="mt-3 border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">No hay una operación en curso en el servidor: los pedidos se guardan solo en esta pantalla, como ejemplo.</p>}
+      <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <label className={label}>Cliente<input value={form.customer} onChange={e => update('customer', e.target.value)} className={input} placeholder="Nombre completo" /></label>
+        <label className={label}>Coordenada X<input type="number" value={form.x} onChange={e => update('x', e.target.value)} className={input} placeholder="0–70 km" /></label>
+        <label className={label}>Coordenada Y<input type="number" value={form.y} onChange={e => update('y', e.target.value)} className={input} placeholder="0–50 km" /></label>
+        <label className={label}>Unidades de producto P<input type="number" value={form.units} onChange={e => update('units', e.target.value)} className={input} /></label>
+        <label className={label}>Tipo de entrega<select value={form.delivery} onChange={e => update('delivery', e.target.value)} className="border border-slate-200 px-3 py-2.5 text-sm"><option>Regular</option><option>Priorizada</option></select></label>
+        {form.delivery === 'Priorizada'
+          ? <label className={label}>Plazo<select value={form.hours} onChange={e => update('hours', e.target.value)} className="border border-slate-200 px-3 py-2.5 text-sm"><option value="4">4 horas</option><option value="8">8 horas</option><option value="12">12 horas</option><option value="18">18 horas</option></select></label>
+          : <div className="flex flex-col justify-end gap-2 text-xs font-semibold text-slate-600"><span>Plazo automático</span><div className="border border-slate-100 bg-slate-50 px-3 py-2.5 text-sm">36 horas</div></div>}
+      </div>
+      <div className="mt-5 flex flex-wrap items-center gap-3">
+        <button onClick={submit} disabled={enviando} className={`px-5 py-2.5 text-sm font-bold text-white ${enviando ? 'cursor-wait bg-slate-400' : 'bg-blue-700'}`}>{enviando ? 'Registrando…' : 'Registrar pedido'}</button>
+        {message && <span role={message.ok ? 'status' : 'alert'} className={`text-xs font-semibold ${message.ok ? 'text-emerald-700' : 'text-red-700'}`}>{message.texto}</span>}
+      </div>
+    </section>
+    <section className="border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between"><div><p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Pedidos registrados</p><h2 className="mt-1 text-lg font-bold">Cola de pedidos ({cola ? cola.length : orders.length})</h2></div><Package className="size-5 text-slate-400" /></div>
+      <div className="mt-4 max-h-[480px] overflow-auto">
+        {cola
+          ? <table className="w-full min-w-[900px] text-left text-xs"><thead className="sticky top-0 border-y border-slate-200 bg-white text-[10px] uppercase tracking-wider text-slate-400"><tr>{['Código', 'Destino', 'Unidades', 'Entrega', 'Ingreso', 'Fecha/hora límite', 'Estado'].map(h => <th key={h} className="px-3 py-3">{h}</th>)}</tr></thead>
+              <tbody>{cola.map(o => <tr key={o.id} className="border-b border-slate-100"><td className="px-3 py-3 font-bold">{o.codigo}</td><td className="px-3 py-3">({o.x}, {o.y}) km</td><td className="px-3 py-3">{o.cantidad}</td><td className="px-3 py-3">{o.tipo === 'PRIORIZADO' ? 'Priorizada' : 'Regular'} · {Math.round(o.fechaLimiteH - o.horaIngresoH)} h</td><td className="px-3 py-3 text-slate-500">{hora(o.horaIngresoH)}</td><td className="px-3 py-3 text-slate-500">{hora(o.fechaLimiteH)}</td><td className="px-3 py-3">{ETIQUETA_ESTADO[o.estado]}</td></tr>)}</tbody></table>
+          : <table className="w-full min-w-[900px] text-left text-xs"><thead className="border-y border-slate-200 text-[10px] uppercase tracking-wider text-slate-400"><tr>{['ID', 'Cliente', 'Coordenadas', 'Unidades', 'Entrega', 'Ingreso', 'Fecha/hora límite'].map(h => <th key={h} className="px-3 py-3">{h}</th>)}</tr></thead>
+              <tbody>{orders.map(o => <tr key={o.id} className="border-b border-slate-100"><td className="px-3 py-3 font-bold">{o.id}</td><td className="px-3 py-3">{o.customer}</td><td className="px-3 py-3">({o.x}, {o.y}) km</td><td className="px-3 py-3">{o.units}</td><td className="px-3 py-3">{o.delivery} · {o.hours} h</td><td className="px-3 py-3 text-slate-500">{o.entered}</td><td className="px-3 py-3 text-slate-500">{o.deadline}</td></tr>)}</tbody></table>}
+      </div>
+    </section>
+  </div>
+}
 
 const COLOR_TIPO: Record<TipoVehiculo, string> = { AUTO: '#2563eb', MOTO: '#7c3aed', BICICLETA: '#0f9f8d' }
 const CLASE_TIPO: Record<TipoVehiculo, string> = { AUTO: 'bg-blue-600', MOTO: 'bg-violet-600', BICICLETA: 'bg-teal-600' }
@@ -89,6 +155,8 @@ function Map({ state, highlightOrderId, full = false, replanned = false, onWareh
   const objetivo = buscado ? (datos?.rastreo ?? DEMO_RASTREO).find(q => q.codigo === buscado) ?? null : null
   const almacenes = datos ? datos.almacenes.map(a => ({ nombre: NOMBRE_ALMACEN[a.codigo] ?? a.codigo, x: a.x, y: a.y, central: a.central, pct: a.pct, enBase: a.vehiculosEnBase as number | null })) : DEMO_ALMACENES
   const demoPedidos = DEMO_RASTREO.map(q => [q.codigo, q.x, q.y] as const)
+  const averiadas = new Set(datos?.flota.filter(v => v.averiada).map(v => v.id))
+  const hayBloqueo = !!datos?.incidencias.some(i => i.tipo === 'BLOQUEO')
   return <div className={`${full ? 'absolute inset-0' : 'relative min-h-[480px]'} overflow-hidden bg-[#e9eef0]`}>
     <svg className="absolute inset-0 size-full" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
       <rect width={W} height={H} fill="#e9eef0" />
@@ -106,6 +174,8 @@ function Map({ state, highlightOrderId, full = false, replanned = false, onWareh
           <polyline points={r([[31, 21], [34, 21], [34, 25]])} fill="none" stroke="#dc2626" strokeWidth="5" />
         </>}
       </>}
+      {/* Tramos bloqueados vigentes (incidencias del back-end) */}
+      {datos?.incidencias.filter(i => i.tipo === 'BLOQUEO').flatMap(i => i.tramos.map((t, k) => { const [a, b] = [p(t.x1, t.y1).split(','), p(t.x2, t.y2).split(',')]; return <line key={`${i.id}-${k}`} x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke="#dc2626" strokeWidth="6" strokeLinecap="round"><title>{i.descripcion ?? 'Tramo bloqueado'}</title></line> }))}
       {datos?.rutas.map(ru => { const marcada = objetivo?.vehiculoId === ru.vehiculoId; return <g key={ru.id}>
         <polyline points={r(ru.puntos)} fill="none" stroke={COLOR_TIPO[ru.tipo]} strokeWidth={marcada ? 6 : 3} opacity={objetivo && !marcada ? 0.35 : 0.85} />
         {ru.recorrido.length > 1 && <polyline points={r(ru.recorrido)} fill="none" stroke="#94a3b8" strokeWidth={marcada ? 6.5 : 3.5} strokeDasharray="6 5" />}
@@ -121,9 +191,9 @@ function Map({ state, highlightOrderId, full = false, replanned = false, onWareh
       {a.enBase != null && <span className="block whitespace-nowrap bg-white/90 px-1.5 text-[10px] font-semibold text-slate-500 shadow-sm">{a.enBase} vehículos en base</span>}
     </div>)}
 
-    {(datos ? datos.vehiculos.map(v => [ETIQUETA_TIPO[v.tipo], Math.round(v.x * 10) / 10, Math.round(v.y * 10) / 10, v.tipo === 'AUTO' ? Car : Bike, CLASE_TIPO[v.tipo], `${v.codigo} · carga ${v.carga}/${v.capacidad}`, objetivo?.vehiculoId === v.id]) : [['Auto', 35, 34, Car, 'bg-blue-600', 'V-014 · 40 km/h', false], ['Moto', 19, 29, Bike, 'bg-violet-600', 'M-022 · 25 km/h', false], ['Bicicleta', 48, 12, Bike, 'bg-teal-600', 'B-031 · 12 km/h', false]]).map(([name, x, y, Icon, color, detail, marcado]) => <div key={detail as string} title={`${name} ${detail} · (${x},${y})`} className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer transition hover:scale-110" style={pos(x as number, y as number)}>
-      <div className={`flex size-8 items-center justify-center rounded-full ${color as string} text-white shadow-md ring-2 ${marcado ? 'ring-4 ring-blue-300' : 'ring-white'}`}>{(() => { const Icono = Icon as typeof Car; return <Icono className="size-4" /> })()}</div>
-      <span className="mt-1 block whitespace-nowrap bg-white/90 px-1 text-[10px] font-bold text-slate-700 shadow-sm">{name as string}</span>
+    {(datos ? datos.vehiculos.map(v => [ETIQUETA_TIPO[v.tipo], Math.round(v.x * 10) / 10, Math.round(v.y * 10) / 10, v.tipo === 'AUTO' ? Car : Bike, CLASE_TIPO[v.tipo], `${v.codigo} · carga ${v.carga}/${v.capacidad}`, objetivo?.vehiculoId === v.id, averiadas.has(v.id)]) : [['Auto', 35, 34, Car, 'bg-blue-600', 'V-014 · 40 km/h', false, false], ['Moto', 19, 29, Bike, 'bg-violet-600', 'M-022 · 25 km/h', false, false], ['Bicicleta', 48, 12, Bike, 'bg-teal-600', 'B-031 · 12 km/h', false, false]]).map(([name, x, y, Icon, color, detail, marcado, averiado]) => <div key={detail as string} title={`${name} ${detail} · (${x},${y})${averiado ? ' · averiado' : ''}`} className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer transition hover:scale-110" style={pos(x as number, y as number)}>
+      <div className={`flex size-8 items-center justify-center rounded-full ${averiado ? 'bg-red-600' : color as string} text-white shadow-md ring-2 ${marcado ? 'ring-4 ring-blue-300' : averiado ? 'ring-red-200' : 'ring-white'}`}>{(() => { const Icono = averiado ? Wrench : Icon as typeof Car; return <Icono className="size-4" /> })()}</div>
+      <span className={`mt-1 block whitespace-nowrap px-1 text-[10px] font-bold shadow-sm ${averiado ? 'bg-red-700 text-white' : 'bg-white/90 text-slate-700'}`}>{averiado ? `${name} · averiado` : name as string}</span>
     </div>)}
 
     {datos ? datos.pedidos.map(pe => { const esBuscado = pe.codigo === buscado; return <div key={pe.id} onClick={() => onPedido?.(pe.codigo)} title={`${pe.codigo} · destino (${pe.x},${pe.y}) · ${pe.cantidad} u · ${ETIQUETA_ESTADO[pe.estado]}${pe.margenH != null ? ` · margen ${pe.margenH.toFixed(1)} h` : ''}${onPedido ? ' · clic para ver la ficha' : ''}`} style={pos(pe.x, pe.y)} className={`absolute -translate-x-1/2 -translate-y-1/2 transition hover:scale-125 ${onPedido ? 'cursor-pointer' : ''} ${esBuscado ? 'z-[5]' : ''}`}>
@@ -144,12 +214,12 @@ function Map({ state, highlightOrderId, full = false, replanned = false, onWareh
 
     {incident && <div className="absolute left-[45%] top-[32%] bg-red-50 px-3 py-2 text-xs font-bold text-red-700 shadow"><AlertTriangle className="mr-1 inline size-4" />Incidencia detectada · Replanificación en proceso</div>}
     {isCollapse && highlightOrderId && <div className={`absolute right-4 ${full ? 'top-16' : 'top-4'} bg-red-700 px-3 py-2 text-xs font-bold text-white shadow`}>Localizando {highlightOrderId} · (48,34) · fuera de plazo</div>}
-    <Leyenda full={full} real={!!datos} incident={incident || replanned || isCollapse} collapse={isCollapse} buscado={!!buscado} />
+    <Leyenda full={full} real={!!datos} incident={datos ? hayBloqueo : incident || replanned || isCollapse} averia={averiadas.size > 0} collapse={isCollapse} buscado={!!buscado} />
   </div>
 }
 
 // Leyenda del mapa: explica cada símbolo que se dibuja; se puede recoger para ver el mapa completo
-function Leyenda({ full, real, incident, collapse, buscado }: { full: boolean; real: boolean; incident: boolean; collapse: boolean; buscado: boolean }) {
+function Leyenda({ full, real, incident, averia = false, collapse, buscado }: { full: boolean; real: boolean; incident: boolean; averia?: boolean; collapse: boolean; buscado: boolean }) {
   // En pantallas bajas (laptops) empieza recogida para no tapar el mapa
   const [abierta, setAbierta] = useState(() => typeof window === 'undefined' || window.innerHeight >= 900)
   const item = 'flex items-center gap-1.5'
@@ -184,9 +254,10 @@ function Leyenda({ full, real, incident, collapse, buscado }: { full: boolean; r
         </>}
         {buscado && <span className={item}><span className="inline-block size-3 rounded-full border-2 border-blue-700 bg-white ring-2 ring-blue-500" />Pedido buscado</span>}
       </div>
-      {(incident || collapse) && <div className="flex flex-wrap gap-x-3 gap-y-1">
+      {(incident || averia || collapse) && <div className="flex flex-wrap gap-x-3 gap-y-1">
         <span className={titulo}>Incidencias</span>
         {incident && <span className={`${item} text-red-700`}><span className="inline-block h-1 w-5 bg-red-600" />Tramo bloqueado</span>}
+        {averia && <span className={`${item} text-red-700`}><span className="flex size-3.5 items-center justify-center rounded-full bg-red-600 text-white"><Wrench className="size-2.5" /></span>Unidad averiada</span>}
         {collapse && <span className={`${item} text-red-700`}><span className="inline-block size-3 rounded-full bg-red-600" />Pedido causante del colapso</span>}
       </div>}
     </div>
@@ -235,6 +306,81 @@ function FichaPedido({ p, hora, onCerrar }: { p: PedidoRastreo; hora: (h: number
     <div className="flex items-start justify-between gap-2"><div><p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Ficha del pedido</p><p className="text-sm font-bold">{p.codigo}</p></div><span className={`border px-2 py-0.5 font-bold ${tono}`}>{ETIQUETA_ESTADO[p.estado]}</span></div>
     <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">{filas.map(([a, b]) => <Fragment key={a}><dt className="text-slate-500">{a}</dt><dd className="font-semibold">{b}</dd></Fragment>)}</dl>
     <button onClick={onCerrar} className="mt-2 border border-slate-300 bg-white px-2.5 py-1 font-bold text-slate-600">Quitar búsqueda</button>
+  </div>
+}
+
+// Incidencias (averías y bloqueos) en un solo lugar, el mismo en la operación día a día y en las simulaciones.
+// Con un escenario del back-end se registran en él al reloj actual y el planificador replanifica; sin back-end,
+// la avería recorre la escena de demostración del prototipo.
+function Incidencias({ mapa, escenarioId, hora, instanteDemo, onDemo, onCambio, onCerrar }: { mapa: MapaDatos | null; escenarioId: number | null; hora: (h: number) => string; instanteDemo: string; onDemo: () => void; onCambio: () => void; onCerrar: () => void }) {
+  const [tab, setTab] = useState<'averia' | 'bloqueo'>('averia')
+  const [unidad, setUnidad] = useState('')
+  const [tipo, setTipo] = useState('')
+  const [bloqueo, setBloqueo] = useState({ x1: '', y1: '', x2: '', y2: '', horas: '2', motivo: '' })
+  const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const real = escenarioId != null && mapa != null
+  const vigentes = mapa?.incidencias ?? []
+  const codigoDe = (id: number | null) => mapa?.flota.find(v => v.id === id)?.codigo ?? `V-${id}`
+  // Primero las unidades en ruta, que son las que suelen averiarse en plena operación
+  const unidades = real ? mapa.flota.filter(v => !v.averiada).sort((a, b) => Number(b.enRuta) - Number(a.enRuta) || a.codigo.localeCompare(b.codigo)) : []
+  const TIPOS = ['1 · Leve (sigue asignado con penalidad)', '2 · Media (requiere replanificación)', '3 · Grave (fuera de asignación inmediata)']
+  const ejecutar = async (accion: () => Promise<unknown>, ok: string) => {
+    setBusy(true); setMsg(null)
+    try { await accion(); setMsg({ ok: true, texto: ok }); onCambio() } catch (e) { setMsg({ ok: false, texto: mensajeError(e) }) } finally { setBusy(false) }
+  }
+  const confirmarAveria = () => {
+    if (!unidad) return setMsg({ ok: false, texto: 'Selecciona la unidad averiada.' })
+    if (!tipo) return setMsg({ ok: false, texto: 'Selecciona el tipo de avería 1, 2 o 3.' })
+    if (!real) { onDemo(); onCerrar(); return }
+    const v = Number(unidad)
+    ejecutar(() => registrarAveria(escenarioId, v, `Avería tipo ${tipo}`), `Avería de ${codigoDe(v)} registrada. La unidad sale de la flota y se replanifica.`).then(() => { setUnidad(''); setTipo('') })
+  }
+  const confirmarBloqueo = () => {
+    const [x1, y1, x2, y2, horas] = [bloqueo.x1, bloqueo.y1, bloqueo.x2, bloqueo.y2, bloqueo.horas].map(Number)
+    if ([bloqueo.x1, bloqueo.y1, bloqueo.x2, bloqueo.y2].some(v => v === '')) return setMsg({ ok: false, texto: 'Indica los dos extremos del tramo bloqueado.' })
+    if (![x1, x2].every(v => Number.isInteger(v) && v >= 0 && v <= 70) || ![y1, y2].every(v => Number.isInteger(v) && v >= 0 && v <= 50)) return setMsg({ ok: false, texto: 'Los extremos son nodos enteros: X entre 0 y 70, Y entre 0 y 50.' })
+    if (!Number.isFinite(horas) || horas <= 0 || horas > 120) return setMsg({ ok: false, texto: 'La duración debe estar entre 1 y 120 horas.' })
+    let tramos: Tramo[]
+    try { tramos = tramosEntre(x1, y1, x2, y2) } catch (e) { return setMsg({ ok: false, texto: mensajeError(e) }) }
+    ejecutar(() => registrarBloqueo(escenarioId!, tramos, horas, bloqueo.motivo.trim() || `Bloqueo (${x1},${y1})–(${x2},${y2})`), `Bloqueo de ${tramos.length} km registrado por ${horas} h. Las rutas lo evitan desde el siguiente plan.`).then(() => setBloqueo({ x1: '', y1: '', x2: '', y2: '', horas: '2', motivo: '' }))
+  }
+  const field = 'mt-1 w-full border border-slate-200 px-2.5 py-2 font-normal'
+  const pestaña = (id: 'averia' | 'bloqueo', texto: string) => <button onClick={() => { setTab(id); setMsg(null) }} className={`border-b-2 px-3 py-2 font-bold ${tab === id ? 'border-red-600 text-red-700' : 'border-transparent text-slate-500'}`}>{texto}</button>
+  return <div className="fixed inset-0 z-20 flex items-center justify-center bg-slate-900/30 p-4" onClick={onCerrar}>
+    <div className="max-h-full w-full max-w-lg overflow-y-auto border border-slate-200 bg-white p-5 text-xs shadow-xl" onClick={e => e.stopPropagation()}>
+      <div className="flex items-start justify-between gap-2"><div><h3 className="text-lg font-bold">Incidencias</h3><p className="mt-0.5 text-slate-500">Instante registrado por el sistema (no editable): <b>{real ? `${hora(mapa.relojH)} · reloj actual` : instanteDemo}</b></p></div><button onClick={onCerrar} aria-label="Cerrar"><X className="size-4" /></button></div>
+      <div className="mt-3 flex border-b border-slate-200">{pestaña('averia', 'Registrar avería')}{pestaña('bloqueo', 'Registrar bloqueo')}</div>
+
+      {tab === 'averia' && <div className="mt-3">
+        <label className="flex flex-col font-semibold">Unidad averiada<select value={unidad} onChange={e => setUnidad(e.target.value)} className={field}><option value="">Seleccionar unidad…</option>
+          {real ? unidades.map(v => <option key={v.id} value={v.id}>{v.codigo} · {ETIQUETA_TIPO[v.tipo]} · {v.enRuta ? 'en ruta' : 'en base'}</option>)
+            : ['Auto V-014 · Ruta azul', 'Moto M-022 · Ruta violeta', 'Bicicleta B-031 · Ruta verde'].map(o => <option key={o}>{o}</option>)}
+        </select></label>
+        <label className="mt-3 flex flex-col font-semibold">Tipo de avería<select value={tipo} onChange={e => setTipo(e.target.value)} className={field}><option value="">Seleccionar tipo…</option>{TIPOS.map(t => <option key={t}>{t}</option>)}</select></label>
+        {real && <p className="mt-2 text-slate-500">El servidor retira la unidad de la flota disponible y vuelve a planificar sus pedidos. El tipo queda anotado en la incidencia.</p>}
+        <button disabled={busy} onClick={confirmarAveria} className="mt-4 bg-red-700 px-4 py-2 font-bold text-white disabled:bg-slate-400">{busy ? 'Registrando…' : 'Confirmar · marcar fuera de asignación'}</button>
+      </div>}
+
+      {tab === 'bloqueo' && <div className="mt-3">
+        {!real ? <p className="border border-amber-200 bg-amber-50 px-3 py-2 font-semibold text-amber-800">Para registrar un bloqueo hace falta una operación o simulación en curso en el servidor.</p> : <>
+          <p className="text-slate-500">El bloqueo corta una calle entre dos nodos de la cuadrícula: ambos extremos deben tener la misma X (calle vertical) o la misma Y (calle horizontal).</p>
+          <div className="mt-2 grid grid-cols-4 gap-2">{([['x1', 'Desde X'], ['y1', 'Desde Y'], ['x2', 'Hasta X'], ['y2', 'Hasta Y']] as const).map(([k, t]) => <label key={k} className="font-semibold">{t}<input type="number" value={bloqueo[k]} onChange={e => setBloqueo({ ...bloqueo, [k]: e.target.value })} className={field} /></label>)}</div>
+          <div className="mt-2 grid grid-cols-[1fr_2fr] gap-2"><label className="font-semibold">Duración (h)<input type="number" value={bloqueo.horas} onChange={e => setBloqueo({ ...bloqueo, horas: e.target.value })} className={field} /></label><label className="font-semibold">Motivo (opcional)<input value={bloqueo.motivo} onChange={e => setBloqueo({ ...bloqueo, motivo: e.target.value })} className={field} placeholder="Obras, accidente…" /></label></div>
+          <button disabled={busy} onClick={confirmarBloqueo} className="mt-4 bg-red-700 px-4 py-2 font-bold text-white disabled:bg-slate-400">{busy ? 'Registrando…' : 'Confirmar bloqueo'}</button>
+        </>}
+      </div>}
+
+      {msg && <p role={msg.ok ? 'status' : 'alert'} className={`mt-3 font-semibold ${msg.ok ? 'text-emerald-700' : 'text-red-700'}`}>{msg.texto}</p>}
+
+      {real && <div className="mt-5 border-t border-slate-200 pt-3">
+        <p className="font-bold text-slate-700">Incidencias vigentes ({vigentes.length})</p>
+        {vigentes.length === 0 ? <p className="mt-1 text-slate-500">No hay incidencias activas en este momento.</p> : <ul className="mt-2 flex flex-col gap-1.5">{vigentes.map(i => <li key={i.id} className="flex items-center justify-between gap-2 border border-slate-200 px-2.5 py-1.5">
+          <span>{i.tipo === 'AVERIA' ? <><Wrench className="mr-1 inline size-3.5 text-red-700" /><b>Avería</b> · {codigoDe(i.vehiculoId)}</> : <><AlertTriangle className="mr-1 inline size-3.5 text-red-700" /><b>Bloqueo</b> · {i.tramos.length} km</>} · desde {hora(i.instanteH)}{i.finH != null ? ` hasta ${hora(i.finH)}` : ''}{i.descripcion ? <span className="block text-slate-500">{i.descripcion}</span> : null}</span>
+          <button disabled={busy} onClick={() => ejecutar(() => levantarIncidencia(escenarioId, i.id), i.tipo === 'AVERIA' ? `${codigoDe(i.vehiculoId)} vuelve a estar operativa.` : 'Tramo liberado.')} className="shrink-0 border border-slate-300 px-2 py-1 font-bold text-slate-700">{i.tipo === 'AVERIA' ? 'Unidad reparada' : 'Levantar'}</button>
+        </li>)}</ul>}
+      </div>}
+    </div>
   </div>
 }
 
@@ -313,7 +459,7 @@ function CollapseResults({ variant = 'collapse', onLocate, sim, segReal = 0 }: {
   const indicadores = sim && c ? [['Entregados dentro del plazo', `${c.entregadosATiempo} · ${porcentaje(c.entregadosATiempo, c.incorporados)}`], ['Entregados fuera del plazo', `${c.entregados - c.entregadosATiempo} · ${porcentaje(c.entregados - c.entregadosATiempo, c.incorporados)}`], ['No entregados', `${c.noEntregados} · ${porcentaje(c.noEntregados, c.incorporados)}`], ['Pendientes o en ruta al cierre', `${c.abiertos} · ${porcentaje(c.abiertos, c.incorporados)}`]] : [['Entregados dentro del plazo','184 · 87%'],['Entregados fuera del plazo','16 · 8%'],['Pendientes','8 · 4%'],['En ruta','3 · 1%'],['Distancia total recorrida','4 680 km'],['Costo operativo total','S/ 18 930']]
   const title = variant === 'five' ? 'Resumen final · Simulación 5 días' : variant === 'day' ? 'Corte del día · Operación día a día (sin estado final)' : 'Resumen final · Colapso logístico'; const tone = variant === 'collapse' ? 'red' : 'slate'; return <section className={`border bg-white p-4 shadow-sm ${tone === 'red' ? 'border-red-200' : 'border-slate-200'}`}><div className={`flex flex-wrap items-center justify-between gap-2 border-b pb-3 ${tone === 'red' ? 'border-red-100' : 'border-slate-100'}`}><div><p className={`text-[10px] font-bold uppercase tracking-widest ${tone === 'red' ? 'text-red-700' : 'text-blue-700'}`}>Resultados finales · cantidad y % de cumplimiento</p><h3 className="mt-1 text-base font-bold">{title}</h3></div><span className={`border px-2.5 py-1 text-xs font-bold ${tone === 'red' ? 'border-red-200 bg-red-50 text-red-700' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>{variant === 'day' ? 'Corte operativo' : 'Estado final'}</span></div><div className="mt-4 grid gap-4"><div className="grid grid-cols-2 gap-2">{(variant === 'collapse' ? [['Instante del colapso','11/09/2026 · 16:42'],['Pedido causante','PED-137 · (48,34)'],['Plazo comprometido','11/09/2026 · 19:10'],['Estado del pedido','No entregable dentro del plazo']] : periodo).map(([label,value]) => <div key={label} className="border border-slate-100 bg-slate-50 px-3 py-2"><p className="text-[10px] text-slate-500">{label}</p><p className="mt-0.5 text-sm font-bold">{value}</p>{label === 'Pedido causante' && onLocate && <button onClick={() => onLocate('PED-137')} className="mt-2 border border-red-300 bg-white px-2.5 py-1.5 text-xs font-bold text-red-700">Localizar en mapa</button>}</div>)}</div><div><p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">Indicadores acumulados</p><div className="grid grid-cols-2 gap-2">{indicadores.map(([label,value]) => <div key={label} className="border border-slate-100 px-3 py-2"><p className="text-[10px] leading-tight text-slate-500">{label}</p><p className="mt-1 text-base font-bold">{value}</p></div>)}</div>{sim ? <p className="mt-4 text-[11px] text-slate-500">Distancia, costo y desglose por vehículo todavía no los expone el back-end.</p> : <><p className="mb-2 mt-4 text-[10px] font-bold uppercase tracking-wider text-slate-500">Desglose por tipo de vehículo</p><div className="grid grid-cols-3 gap-2">{[['Autos','2 410 km · S/ 9 840'],['Motos','1 520 km · S/ 5 920'],['Bicicletas','750 km · S/ 3 170']].map(([label,value]) => <div key={label} className="border border-slate-100 px-3 py-2"><p className="text-[10px] text-slate-500">{label}</p><p className="mt-1 text-sm font-bold">{value}</p></div>)}</div></>}</div></div></section> }
 
-function Operator({ scenario, setScenario, state, setState, replanned, setReplanned, sim, setSim, mapa, hora, segReal }: { mapa: MapaDatos | null; hora: (h: number) => string; segReal: number; scenario: Scenario; setScenario: (s: Scenario) => void; state: ExecState; setState: (s: ExecState) => void; replanned: boolean; setReplanned: (r: boolean) => void; sim: VistaSimulacion | null; setSim: (s: VistaSimulacion | null) => void }) {
+function Operator({ scenario, setScenario, state, setState, replanned, setReplanned, sim, setSim, mapa, escenarioId, onCambio, hora, segReal }: { mapa: MapaDatos | null; escenarioId: number | null; onCambio: () => void; hora: (h: number) => string; segReal: number; scenario: Scenario; setScenario: (s: Scenario) => void; state: ExecState; setState: (s: ExecState) => void; replanned: boolean; setReplanned: (r: boolean) => void; sim: VistaSimulacion | null; setSim: (s: VistaSimulacion | null) => void }) {
   const [performance, setPerformance] = useState(false)
   const [warehouse, setWarehouse] = useState<string | null>(null)
   const [params, setParams] = useState(false)
@@ -322,9 +468,6 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
   const [orderLight, setOrderLight] = useState({ verde: '8', rojo: '2' })
   const [stockLight, setStockLight] = useState({ verde: '50', rojo: '20' })
   const [paramsMsg, setParamsMsg] = useState('')
-  const [faultType, setFaultType] = useState('')
-  const [faultUnit, setFaultUnit] = useState('')
-  const [faultError, setFaultError] = useState('')
   const [highlightOrderId, setHighlightOrderId] = useState<string | null>(null)
   const [buscado, setBuscado] = useState<string | null>(null)
   // En pantallas pequeñas el panel empieza recogido para no tapar el mapa
@@ -359,6 +502,13 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
     setParamsMsg('Cambios aplicados. No alteran el reloj de la ejecución.')
   }
   const toolButton = 'border bg-white/95 px-3 py-2 text-xs font-bold shadow'
+  // Rendimiento con datos reales: cumplimiento contado sobre los pedidos del escenario
+  const rend = mapa ? (() => {
+    const r = mapa.rastreo, entregados = r.filter(q => q.estado === 'ENTREGADO')
+    const aTiempo = entregados.filter(q => q.entregadoEnH != null && q.entregadoEnH <= q.fechaLimiteH).length
+    const noEntregados = r.filter(q => q.estado === 'NO_ENTREGADO').length
+    return { total: r.length, aTiempo, tarde: entregados.length - aTiempo, noEntregados, abiertos: r.length - entregados.length - noEntregados }
+  })() : null
   const field = 'mt-1 w-full border border-slate-200 bg-white px-2 py-1.5'
   return <div className="relative h-full">
     {/* El mapa ocupa todo el espacio libre; con el panel abierto se corre a su derecha (en pantallas medianas o más) */}
@@ -368,9 +518,9 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
     <div className="absolute right-3 top-14 z-10 flex max-w-[calc(100%-1.5rem)] flex-wrap items-start justify-end gap-2 md:top-3">
       <BuscarPedido rastreo={mapa?.rastreo ?? DEMO_RASTREO} buscado={buscado} setBuscado={setBuscado} hora={hora} />
       <button onClick={() => { setParams(!params); setPanel(true) }} className={`${toolButton} ${params ? 'border-blue-600 text-blue-700' : 'border-slate-200'}`}><Settings2 className="mr-1 inline size-4" />Parámetros operativos</button>
-      {!simFinished && <button onClick={() => setBreakdown(true)} className={`${toolButton} border-red-200 text-red-700`}><Wrench className="mr-1 inline size-4" />Registrar avería</button>}
-      {state === 'running' && !replanned && <button onClick={() => { setReplanned(false); setState('incident') }} className={`${toolButton} border-red-200 text-red-700`}>Ver incidencia planificada</button>}
-      {state === 'incident' && <button onClick={() => { setReplanned(true); setState('running') }} title="Replanificar no termina la ejecución: la operación continúa" className="bg-blue-700 px-3 py-2 text-xs font-bold text-white shadow">Plan actualizado</button>}
+      {!simFinished && <button onClick={() => setBreakdown(true)} className={`${toolButton} border-red-200 text-red-700`}><Wrench className="mr-1 inline size-4" />Incidencias{(mapa?.incidencias.length ?? 0) > 0 && <span className="ml-1.5 bg-red-600 px-1.5 text-white">{mapa?.incidencias.length}</span>}</button>}
+      {!mapa && state === 'running' && !replanned && <button onClick={() => { setReplanned(false); setState('incident') }} className={`${toolButton} border-red-200 text-red-700`}>Ver incidencia planificada</button>}
+      {!mapa && state === 'incident' && <button onClick={() => { setReplanned(true); setState('running') }} title="Replanificar no termina la ejecución: la operación continúa" className="bg-blue-700 px-3 py-2 text-xs font-bold text-white shadow">Plan actualizado</button>}
       {state === 'running' && scenario === 'collapse' && <button onClick={() => setState('collapse')} className="bg-red-700 px-3 py-2 text-xs font-bold text-white shadow">Simular colapso</button>}
     </div>
 
@@ -423,7 +573,9 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
 
         {/* Al terminar, el resumen final reemplaza al panel de rendimiento */}
         <div className="flex flex-wrap gap-2">{!simFinished && <button onClick={() => setPerformance(!performance)} aria-expanded={performance} className="flex items-center gap-2 border border-slate-200 bg-white px-3 py-2 text-xs font-bold">Rendimiento <ChevronDown className={`size-4 ${performance ? 'rotate-180' : ''}`} /></button>}{['Almacén central', 'Nor-Oeste', 'Intermedio Este'].map(w => <button key={w} title={`Ver stock de ${w}`} onClick={() => warehouse === w ? setWarehouse(null) : openWarehouse(w)} className={`border px-3 py-2 text-xs font-bold ${warehouse === w ? 'border-blue-700 bg-blue-50 text-blue-800' : 'border-slate-200 bg-white'}`}>{w}</button>)}</div>
-        {performance && !simFinished && <div className="grid gap-3 border border-slate-200 bg-white p-4 text-xs"><div><span className="text-slate-500">Cumplimiento</span><b className="block text-lg">184 · 87% dentro de plazo</b><span className="text-slate-600">16 · 8% fuera de plazo · 11 · 5% pendientes o en ruta</span></div><div className="grid grid-cols-2 gap-3"><div><span className="text-slate-500">Distancia recorrida</span><b className="block text-lg">4 680 km</b></div><div><span className="text-slate-500">Costo operativo</span><b className="block text-lg">S/ 18 930</b></div></div></div>}
+        {performance && !simFinished && (rend
+          ? <div className="grid gap-3 border border-slate-200 bg-white p-4 text-xs"><div><span className="text-slate-500">Cumplimiento · {rend.total} pedidos del escenario</span><b className="block text-lg">{rend.aTiempo} · {porcentaje(rend.aTiempo, rend.total)} entregados a tiempo</b><span className="text-slate-600">{rend.tarde} · {porcentaje(rend.tarde, rend.total)} fuera de plazo · {rend.noEntregados} · {porcentaje(rend.noEntregados, rend.total)} no entregados · {rend.abiertos} · {porcentaje(rend.abiertos, rend.total)} pendientes o en ruta</span></div><div className="grid grid-cols-2 gap-3"><div><span className="text-slate-500">Distancia del plan vigente</span><b className="block text-lg">{mapa?.resumen.distanciaPlanKm != null ? `${Math.round(mapa.resumen.distanciaPlanKm).toLocaleString('es-PE')} km` : '—'}</b></div><div><span className="text-slate-500">Costo del plan vigente</span><b className="block text-lg">{mapa?.resumen.costoPlan != null ? `S/ ${Math.round(mapa.resumen.costoPlan).toLocaleString('es-PE')}` : '—'}</b></div></div><p className="text-[11px] text-slate-500">El costo y la distancia acumulados de todo el periodo todavía no los expone el back-end.</p></div>
+          : <div className="grid gap-3 border border-slate-200 bg-white p-4 text-xs"><div><span className="text-slate-500">Cumplimiento</span><b className="block text-lg">184 · 87% dentro de plazo</b><span className="text-slate-600">16 · 8% fuera de plazo · 11 · 5% pendientes o en ruta</span></div><div className="grid grid-cols-2 gap-3"><div><span className="text-slate-500">Distancia recorrida</span><b className="block text-lg">4 680 km</b></div><div><span className="text-slate-500">Costo operativo</span><b className="block text-lg">S/ 18 930</b></div></div></div>)}
         {warehouse && <div id="panel-almacen" className="border border-blue-200 bg-blue-50 p-4 text-xs"><button onClick={() => setWarehouse(null)} className="float-right" aria-label="Cerrar panel de almacén"><X className="size-4" /></button><b className="text-sm">{warehouse}</b>{(() => {
           // Con datos del back-end: stock y unidades reales; sin ellos, los valores de ejemplo del prototipo
           const a = mapa?.almacenes.find(x => (NOMBRE_ALMACEN[x.codigo] ?? x.codigo) === warehouse)
@@ -437,7 +589,7 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
       </div>
     </aside> : <button onClick={() => setPanel(true)} className="absolute left-3 top-3 z-10 flex items-center gap-2 border border-slate-200 bg-white/95 px-3 py-2 text-xs font-bold shadow"><PanelLeftOpen className="size-4" />Panel de control</button>}
 
-    {breakdown && <div className="fixed inset-0 z-20 flex items-center justify-center bg-slate-900/30 p-4"><div className="w-full max-w-md border border-slate-200 bg-white p-5 shadow-xl"><button onClick={() => setBreakdown(false)} className="float-right" aria-label="Cerrar"><X className="size-4" /></button><h3 className="text-lg font-bold">Registrar avería</h3><p className="mt-1 text-xs text-slate-500">Instante vigente registrado por el sistema (no editable): <b>{faultTime}</b></p><label className="mt-4 flex flex-col gap-2 text-xs font-semibold">Unidad (vehículo inequívoco)<select value={faultUnit} onChange={e => setFaultUnit(e.target.value)} className="border border-slate-200 px-3 py-2"><option value="">Seleccionar unidad…</option><option>Auto V-014 · Ruta azul</option><option>Moto M-022 · Ruta violeta</option><option>Bicicleta B-031 · Ruta verde</option></select></label><label className="mt-3 flex flex-col gap-2 text-xs font-semibold">Tipo de avería<select value={faultType} onChange={e => setFaultType(e.target.value)} className="border border-slate-200 px-3 py-2"><option value="">Seleccionar tipo…</option><option>1 · Leve (sigue asignado con penalidad)</option><option>2 · Media (requiere replanificación)</option><option>3 · Grave (fuera de asignación inmediata)</option></select></label>{faultError && <p className="mt-3 text-xs font-bold text-red-700">{faultError}</p>}<div className="mt-5 flex gap-2"><button onClick={() => { if (!faultUnit) return setFaultError('Selecciona la unidad (vehículo + ruta).'); if (!faultType) return setFaultError('Selecciona el tipo de avería 1/2/3.'); setFaultError(''); setBreakdown(false); setReplanned(false); if (onDay) setScenario('day'); setState('incident') }} className="bg-red-700 px-4 py-2 text-xs font-bold text-white">Confirmar · marcar fuera de asignación</button><button onClick={() => { setFaultError(''); setBreakdown(false) }} className="border border-slate-300 px-4 py-2 text-xs font-bold">Cancelar</button></div></div></div>}
+    {breakdown && <Incidencias mapa={mapa} escenarioId={escenarioId} hora={hora} instanteDemo={faultTime} onCambio={onCambio} onCerrar={() => setBreakdown(false)} onDemo={() => { setReplanned(false); if (onDay) setScenario('day'); setState('incident') }} />}
   </div>
 }
 
@@ -495,6 +647,9 @@ export default function Home() {
   }, [])
   const escenarioMapa = simId ?? escenarioUrl
   const mapaVivo = escenarioMapa != null && (simAlive || escenarioUrl != null)
+  // Tras registrar un pedido o una incidencia se vuelve a consultar el mapa sin esperar al siguiente ciclo
+  const [cambios, setCambios] = useState(0)
+  const refrescar = () => setCambios(n => n + 1)
   useEffect(() => {
     if (escenarioMapa == null) { setMapa(null); return }
     let activo = true
@@ -505,7 +660,7 @@ export default function Home() {
     if (!mapaVivo) return () => { activo = false }
     const t = setInterval(cargar, 2000)
     return () => { activo = false; clearInterval(t) }
-  }, [escenarioMapa, mapaVivo])
+  }, [escenarioMapa, mapaVivo, cambios])
   // El servidor conduce la simulación; aquí solo se consulta su progreso cada 2 s
   useEffect(() => {
     if (simId == null || !simAlive) return
@@ -560,10 +715,10 @@ export default function Home() {
     <Header scenario={scenario} state={effectiveState} replanned={replanned} sim={sim} segReal={segReal} escenario={mapa && escenarioMapa != null ? { id: escenarioMapa, relojH: mapa.relojH } : null} />
     <Nav role={role} setRole={setRole} />
     {role === 'registrador'
-      ? <div className="min-h-0 flex-1 overflow-y-auto bg-[#f3f5f6] p-5 md:p-7"><div className="mx-auto max-w-[1500px]"><Registrar orders={orders} setOrders={setOrders} /></div></div>
+      ? <div className="min-h-0 flex-1 overflow-y-auto bg-[#f3f5f6] p-5 md:p-7"><div className="mx-auto max-w-[1500px]"><Registrar orders={orders} setOrders={setOrders} escenarioId={mapaVivo ? escenarioMapa : null} rastreo={mapaVivo ? mapa?.rastreo ?? null : null} hora={hora} onRegistrado={refrescar} /></div></div>
       : <div className="relative min-h-0 flex-1">
           {mapaError && <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 shadow">Mapa sin actualizar: {mapaError}</div>}
-          {role === 'operador' && <Operator mapa={mapa} hora={hora} segReal={segReal} scenario={scenario} setScenario={setScenario} state={scenario === 'day' ? effectiveState : state} setState={setState} replanned={replanned} setReplanned={setReplanned} sim={sim} setSim={setSim} />}
+          {role === 'operador' && <Operator mapa={mapa} escenarioId={mapaVivo ? escenarioMapa : null} onCambio={refrescar} hora={hora} segReal={segReal} scenario={scenario} setScenario={setScenario} state={scenario === 'day' ? effectiveState : state} setState={setState} replanned={replanned} setReplanned={setReplanned} sim={sim} setSim={setSim} />}
           {role === 'visualizador' && <Viewer sim={sim} mapa={mapa} hora={hora} segReal={segReal} scenario={scenario} state={effectiveState} setState={setState} replanned={replanned} />}
         </div>}
   </main>

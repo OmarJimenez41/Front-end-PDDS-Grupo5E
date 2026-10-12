@@ -103,6 +103,7 @@ export async function pedir<T>(ruta: string, init?: RequestInit): Promise<T> {
     const cuerpo = await respuesta.json().catch(() => null)
     throw new Error(cuerpo?.mensaje ?? `Error ${respuesta.status} en ${ruta}`)
   }
+  if (respuesta.status === 204) return undefined as T
   return respuesta.json() as Promise<T>
 }
 
