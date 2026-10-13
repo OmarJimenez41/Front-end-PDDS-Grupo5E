@@ -79,7 +79,9 @@ export interface MapaDatos {
 /** Umbrales por defecto del semáforo de pedidos (horas de margen); los mismos del panel de parámetros. */
 export const UMBRALES_PEDIDO = { verde: 8, rojo: 2 }
 
-const semaforo = (margen: number | null): Semaforo => margen == null || margen >= UMBRALES_PEDIDO.verde ? 'verde' : margen < UMBRALES_PEDIDO.rojo ? 'rojo' : 'ambar'
+export interface Umbrales { verde: number; rojo: number }
+/** Semáforo por margen en horas; por defecto con los umbrales de fábrica, o con los que fije el operador. */
+export const semaforo = (margen: number | null, u: Umbrales = UMBRALES_PEDIDO): Semaforo => margen == null || margen >= u.verde ? 'verde' : margen < u.rojo ? 'rojo' : 'ambar'
 
 /** Posición sobre el trazado en el instante t (interpolación lineal entre puntos). */
 function posicionEn(trazado: PuntoTrazado[], t: number): { x: number; y: number; indice: number } {
