@@ -50,11 +50,11 @@ function Header({ scenario, state, replanned, sim, segReal, escenario }: { scena
 
 // Un solo estilo de pestaña para toda la aplicación: las principales (Nav) y las de escenario del operador
 const TAB_BAR = 'flex flex-wrap gap-1 border-b border-slate-200 bg-slate-50 pt-1'
-const TAB = 'flex items-center gap-2 border-b-2 px-4 py-2 text-xs font-bold'
+const TAB = 'flex items-center gap-1.5 border-b-2 px-2.5 py-2 text-xs font-bold sm:gap-2 sm:px-4'
 const TAB_ON = 'border-blue-600 bg-white text-blue-700'
 const TAB_OFF = 'border-transparent text-slate-500 hover:text-slate-800'
 
-function Nav({ role, setRole }: { role: Role; setRole: (r: Role) => void }) { return <nav className={`${TAB_BAR} px-5`}>{[['registrador', 'Registrar pedidos', FileText], ['operador', 'Operar sistema', Settings2], ['visualizador', 'Solo consulta', MapPin]].map(([id, label, Icon]) => <button key={id as string} onClick={() => setRole(id as Role)} className={`${TAB} ${role === id ? TAB_ON : TAB_OFF}`}><Icon className="size-4" />{label as string}</button>)}</nav> }
+function Nav({ role, setRole }: { role: Role; setRole: (r: Role) => void }) { return <nav className={`${TAB_BAR} px-2 sm:px-5`}>{[['registrador', 'Registrar pedidos', FileText], ['operador', 'Operar sistema', Settings2], ['visualizador', 'Solo consulta', MapPin]].map(([id, label, Icon]) => <button key={id as string} onClick={() => setRole(id as Role)} className={`${TAB} ${role === id ? TAB_ON : TAB_OFF}`}><Icon className="hidden size-4 sm:block" />{label as string}</button>)}</nav> }
 
 // Reloj del prototipo: los pedidos se registran el 08/09/2026 a las 08:35; la fecha límite es ingreso + plazo
 const deadlineFrom = (hours: number) => { const d = new Date(2026, 8, 8, 8 + hours, 35); const p = (n: number) => String(n).padStart(2, '0'); return `${p(d.getDate())}/${p(d.getMonth() + 1)} · ${p(d.getHours())}:${p(d.getMinutes())}` }
@@ -153,7 +153,7 @@ const DEMO_RASTREO: PedidoRastreo[] = ([['PED-002', 19, 29, 'MOTO', 'M-022', 10.
 
 // Con `datos` (escenario real del back-end) el mapa dibuja almacenes, vehículos, rutas y pedidos reales;
 // sin `datos` muestra la escena de demostración del prototipo. `buscado` es el código del pedido que se rastrea.
-function Map({ state, highlightOrderId, full = false, replanned = false, onWarehouse, onPedido, datos, buscado }: { state: ExecState; highlightOrderId?: string | null; full?: boolean; replanned?: boolean; onWarehouse?: (name: string) => void; onPedido?: (codigo: string) => void; datos?: MapaDatos | null; buscado?: string | null }) {
+function Map({ state, highlightOrderId, full = false, replanned = false, onWarehouse, onPedido, datos, buscado, almacenMarcado }: { state: ExecState; highlightOrderId?: string | null; almacenMarcado?: string | null; full?: boolean; replanned?: boolean; onWarehouse?: (name: string) => void; onPedido?: (codigo: string) => void; datos?: MapaDatos | null; buscado?: string | null }) {
   const u = useContext(UmbralesCtx)
   const incident = state === 'incident'
   const isCollapse = state === 'collapse'
@@ -194,7 +194,7 @@ function Map({ state, highlightOrderId, full = false, replanned = false, onWareh
 
     {/* Almacenes: barra y % de stock disponible (el central es ilimitado) y unidades estacionadas en su base */}
     {almacenes.map(a => <div key={a.nombre} title={`${a.nombre} (${a.x},${a.y}) · ${a.pct == null ? 'stock ilimitado' : `stock ${a.pct}%`}${onWarehouse ? ' · clic para ver detalle' : ''}`} onClick={() => onWarehouse?.(a.nombre)} className={`absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center ${onWarehouse ? 'cursor-pointer transition hover:scale-110' : ''}`} style={pos(a.x, a.y)}>
-      <div className={`flex size-8 items-center justify-center border-2 border-white shadow-md ring-1 ring-slate-300 ${a.central ? 'bg-blue-700' : 'bg-slate-700'} text-white`}><Warehouse className="size-4" /></div>
+      <div className={`flex size-8 items-center justify-center border-2 border-white shadow-md ${a.nombre === almacenMarcado ? 'animate-pulse ring-4 ring-blue-500' : 'ring-1 ring-slate-300'} ${a.central ? 'bg-blue-700' : 'bg-slate-700'} text-white`}><Warehouse className="size-4" /></div>
       {a.pct != null && <div className="mt-1 h-1.5 w-12 bg-white ring-1 ring-slate-300"><div className={`h-full ${CLASE_SEMAFORO[tonoStock(a.pct, u.stock)]}`} style={{ width: `${a.pct}%` }} /></div>}
       <span className="mt-1 block whitespace-nowrap bg-white/90 px-1.5 py-0.5 text-[10px] font-bold text-slate-700 shadow-sm">{a.nombre} · {a.pct == null ? <span className="text-blue-700">stock ilimitado</span> : <span className={TEXTO_SEMAFORO[tonoStock(a.pct, u.stock)]}>stock {a.pct}%</span>}</span>
       {a.enBase != null && <span className="block whitespace-nowrap bg-white/90 px-1.5 text-[10px] font-semibold text-slate-500 shadow-sm">{a.enBase} vehículos en base</span>}
@@ -400,7 +400,7 @@ function Incidencias({ mapa, escenarioId, hora, instanteDemo, onDemo, onCambio, 
 // una simulación, las otras pestañas quedan bloqueadas: para salir está «Detener y volver» o «Cerrar simulación».
 function EscenarioTabs({ scenario, bloqueadas, onCambiar }: { scenario: Scenario; bloqueadas: boolean; onCambiar: (s: Scenario) => void }) {
   const tabs: [Scenario, string, typeof Clock][] = [['day', 'Día a día', Clock], ['five', 'Cinco días', CalendarDays], ['collapse', 'Hasta el colapso', Gauge]]
-  return <div role="tablist" aria-label="Escenario" className={`${TAB_BAR} px-2`}>
+  return <div role="tablist" aria-label="Escenario" className={`${TAB_BAR} px-1 sm:px-2`}>
     {tabs.map(([id, label, Icon]) => {
       const activa = scenario === id, off = bloqueadas && !activa
       return <button key={id} role="tab" aria-selected={activa} disabled={off} title={off ? 'Detén o cierra la simulación para cambiar de escenario' : undefined} onClick={() => !activa && onCambiar(id)} className={`${TAB} ${activa ? TAB_ON : TAB_OFF} ${off ? 'cursor-not-allowed opacity-40' : ''}`}><Icon className="size-4" />{label}</button>
@@ -481,6 +481,7 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
   const u = useContext(UmbralesCtx)
   const [performance, setPerformance] = useState(false)
   const [warehouse, setWarehouse] = useState<string | null>(null)
+  const [marcado, setMarcado] = useState<string | null>(null)
   const [params, setParams] = useState(false)
   const [breakdown, setBreakdown] = useState(false)
   const [speeds] = useState({ Auto: '40', Moto: '25', Bicicleta: '12' })
@@ -533,7 +534,7 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
   const field = 'mt-1 w-full border border-slate-200 bg-white px-2 py-1.5'
   return <div className="relative h-full">
     {/* El mapa ocupa todo el espacio libre; con el panel abierto se corre a su derecha (en pantallas medianas o más) */}
-    <div className={`absolute inset-y-0 right-0 ${panel ? 'left-0 md:left-[412px]' : 'left-0'}`}><Map full state={state} replanned={replanned} highlightOrderId={highlightOrderId} onWarehouse={openWarehouse} onPedido={setBuscado} datos={mapa} buscado={buscado} /></div>
+    <div className={`absolute inset-y-0 right-0 ${panel ? 'left-0 md:left-[412px]' : 'left-0'}`}><Map full state={state} replanned={replanned} highlightOrderId={highlightOrderId} onWarehouse={openWarehouse} onPedido={setBuscado} datos={mapa} buscado={buscado} almacenMarcado={marcado} /></div>
 
     {/* Acciones sobre el mapa */}
     <div className="absolute right-3 top-14 z-10 flex max-w-[calc(100%-1.5rem)] flex-wrap items-start justify-end gap-2 md:top-3">
@@ -570,20 +571,20 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
         {/* Qué muestra el panel según la ejecución: elegir/iniciar, simulación en curso o resultados */}
         {simActive && <div className="border border-blue-200 bg-blue-50 p-3">
           <div className="flex items-center justify-between gap-2"><p className="text-sm font-bold">Simulación en curso</p><span className="flex items-center gap-1.5 text-[11px] font-bold text-blue-700"><span className="size-2 animate-pulse rounded-full bg-blue-600" />{stateLabels[state]}</span></div>
-          <p className="mt-1 text-xs text-slate-600">{simLabels[scenario as SimType]}. La operación en tiempo real sigue activa en paralelo.</p>
-          {scenario === 'five' && sim && <div className="mt-3 flex flex-col gap-2 text-xs">
+          <p className="mt-0.5 text-xs text-slate-600">{simLabels[scenario as SimType]} · la operación real sigue en paralelo.</p>
+          {scenario === 'five' && sim && <div className="mt-2 flex flex-col gap-1.5 text-xs">
             <p>Ejecutándose en el servidor · <b>{fechaHora(sim.fechaSimulada, true)}</b>{sim.simulacion.estado === 'PAUSADA' && <span className="ml-1 font-bold text-amber-700">· en pausa</span>}</p>
             <div className="h-2 w-full bg-white" role="progressbar" aria-valuenow={Math.round(sim.progreso * 100)} aria-valuemin={0} aria-valuemax={100} aria-label="Avance de los cinco días"><div className="h-2 bg-blue-600" style={{ width: `${Math.round(sim.progreso * 100)}%` }} /></div>
             <p className="text-slate-600">{Math.round(sim.progreso * 100)}% · {sim.simulacion.pedidosIncorporados} de {sim.simulacion.pedidosProgramados} pedidos ingresados · {sim.pedidos.entregados} entregados · {sim.simulacion.planificaciones} planificaciones</p>
             {sim.simulacion.pedidosDescartados > 0 && <p className="font-semibold text-red-700">{sim.simulacion.pedidosDescartados} pedidos sin ruta factible (no entregados)</p>}
             {(sim.simulacion.estado === 'ERROR' || sim.simulacion.estado === 'INTERRUMPIDA') && <p className="font-semibold text-red-700">La simulación se detuvo: {sim.simulacion.ultimoError ?? sim.simulacion.estado}</p>}
-            <div className="flex flex-wrap gap-2">
-              {sim.simulacion.estado === 'EJECUTANDO' && <button disabled={simBusy} onClick={() => controlSim(pausarSimulacion)} className="border border-slate-300 bg-white px-3 py-1.5 font-bold text-slate-700">Pausar</button>}
-              {sim.simulacion.estado !== 'EJECUTANDO' && <button disabled={simBusy} onClick={() => controlSim(reanudarSimulacion)} className="border border-blue-300 bg-white px-3 py-1.5 font-bold text-blue-700">Reanudar</button>}
-            </div>
             {simMsg && <p role="alert" className="font-semibold text-red-700">{simMsg}</p>}
           </div>}
-          <button onClick={backToOperation} className="mt-3 w-full border border-red-200 bg-white px-3 py-1.5 text-xs font-bold text-red-700">Detener y volver al día a día</button>
+          <div className="mt-3 flex gap-2 text-xs">
+            {sim && sim.simulacion.estado === 'EJECUTANDO' && <button disabled={simBusy} onClick={() => controlSim(pausarSimulacion)} className="border border-slate-300 bg-white px-3 py-1.5 font-bold text-slate-700">Pausar</button>}
+            {sim && simViva(sim) && sim.simulacion.estado !== 'EJECUTANDO' && <button disabled={simBusy} onClick={() => controlSim(reanudarSimulacion)} className="border border-blue-300 bg-white px-3 py-1.5 font-bold text-blue-700">Reanudar</button>}
+            <button onClick={backToOperation} className="flex-1 border border-red-200 bg-white px-3 py-1.5 font-bold text-red-700">Detener y volver al día a día</button>
+          </div>
         </div>}
         {simFinished && <>
           <CollapseResults variant={scenario === 'collapse' ? 'collapse' : 'five'} sim={scenario === 'five' ? sim : null} segReal={segReal} onLocate={(id) => setHighlightOrderId(id)} />
@@ -595,20 +596,35 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
         {scenario === 'five' && state !== 'idle' && !sim && <div className="flex flex-wrap items-center gap-2 border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs"><p className="w-full"><b>Atajo del prototipo:</b> saltar a un momento de la simulación</p>{([['T0 · Día 2 14:35', 'running', false], ['T1 · Día 3 10:20 incidencia', 'incident', false], ['T2 · Día 3 replanificado', 'running', true], ['T3 · Día 5 completado', 'complete', true]] as [string, ExecState, boolean][]).map(([label, next, rep], i) => <button key={label} onClick={() => { setReplanned(rep); setState(next) }} className={`border px-2.5 py-1.5 font-bold ${simStep === i ? 'border-blue-700 bg-blue-700 text-white' : 'border-slate-300 bg-white text-slate-600'}`}>{label}</button>)}</div>}
 
         {/* Al terminar, el resumen final reemplaza al panel de rendimiento */}
-        <div className="flex flex-wrap gap-2">{!simFinished && <button onClick={() => setPerformance(!performance)} aria-expanded={performance} className="flex items-center gap-2 border border-slate-200 bg-white px-3 py-2 text-xs font-bold">Rendimiento <ChevronDown className={`size-4 ${performance ? 'rotate-180' : ''}`} /></button>}{['Almacén central', 'Nor-Oeste', 'Intermedio Este'].map(w => <button key={w} title={`Ver stock de ${w}`} onClick={() => warehouse === w ? setWarehouse(null) : openWarehouse(w)} className={`border px-3 py-2 text-xs font-bold ${warehouse === w ? 'border-blue-700 bg-blue-50 text-blue-800' : 'border-slate-200 bg-white'}`}>{w}</button>)}</div>
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+          {!simFinished && <button onClick={() => setPerformance(!performance)} aria-expanded={performance} className={`flex items-center gap-1 border px-2.5 py-1.5 font-bold ${performance ? 'border-blue-700 bg-blue-50 text-blue-800' : 'border-slate-200 bg-white'}`}>Rendimiento <ChevronDown className={`size-3.5 ${performance ? 'rotate-180' : ''}`} /></button>}
+          <span className="ml-1 font-semibold text-slate-400">Almacenes</span>
+          {['Almacén central', 'Nor-Oeste', 'Intermedio Este'].map(w => <button key={w} title={`Ver ${w}`} onClick={() => warehouse === w ? setWarehouse(null) : openWarehouse(w)} className={`border px-2.5 py-1.5 font-bold ${warehouse === w ? 'border-blue-700 bg-blue-50 text-blue-800' : 'border-slate-200 bg-white'}`}>{w === 'Almacén central' ? 'Central' : w === 'Intermedio Este' ? 'Este' : w}</button>)}
+        </div>
         {performance && !simFinished && (rend
-          ? <div className="grid gap-3 border border-slate-200 bg-white p-4 text-xs"><div><span className="text-slate-500">Cumplimiento · {rend.total} pedidos del escenario</span><b className="block text-lg">{rend.aTiempo} · {porcentaje(rend.aTiempo, rend.total)} entregados a tiempo</b><span className="text-slate-600">{rend.tarde} · {porcentaje(rend.tarde, rend.total)} fuera de plazo · {rend.noEntregados} · {porcentaje(rend.noEntregados, rend.total)} no entregados · {rend.abiertos} · {porcentaje(rend.abiertos, rend.total)} pendientes o en ruta</span></div><div className="grid grid-cols-2 gap-3"><div><span className="text-slate-500">Distancia del plan vigente</span><b className="block text-lg">{mapa?.resumen.distanciaPlanKm != null ? `${Math.round(mapa.resumen.distanciaPlanKm).toLocaleString('es-PE')} km` : '—'}</b></div><div><span className="text-slate-500">Costo del plan vigente</span><b className="block text-lg">{mapa?.resumen.costoPlan != null ? `S/ ${Math.round(mapa.resumen.costoPlan).toLocaleString('es-PE')}` : '—'}</b></div></div><p className="text-[11px] text-slate-500">El costo y la distancia acumulados de todo el periodo todavía no los expone el back-end.</p></div>
+          ? <div className="border border-slate-200 bg-white p-3 text-xs">
+              <p className="text-slate-500">Cumplimiento · {rend.total} pedidos del escenario</p>
+              <div className="mt-1.5 grid grid-cols-2 gap-1.5">{([['A tiempo', rend.aTiempo, 'text-emerald-700'], ['Fuera de plazo', rend.tarde, 'text-amber-700'], ['No entregados', rend.noEntregados, 'text-red-700'], ['Pendientes o en ruta', rend.abiertos, 'text-slate-700']] as [string, number, string][]).map(([t, n, c]) => <div key={t} className="border border-slate-100 bg-slate-50 px-2 py-1.5"><p className="text-[10px] text-slate-500">{t}</p><b className={`text-sm ${c}`}>{n} · {porcentaje(n, rend.total)}</b></div>)}</div>
+              <p className="mt-2 text-slate-600">Plan vigente: <b>{mapa?.resumen.distanciaPlanKm != null ? `${Math.round(mapa.resumen.distanciaPlanKm).toLocaleString('es-PE')} km` : '—'}</b> · <b>{mapa?.resumen.costoPlan != null ? `S/ ${Math.round(mapa.resumen.costoPlan).toLocaleString('es-PE')}` : '—'}</b></p>
+              <p className="mt-1 text-[10px] text-slate-400">El costo y la distancia acumulados del periodo todavía no los expone el back-end.</p>
+            </div>
           : <div className="grid gap-3 border border-slate-200 bg-white p-4 text-xs"><div><span className="text-slate-500">Cumplimiento</span><b className="block text-lg">184 · 87% dentro de plazo</b><span className="text-slate-600">16 · 8% fuera de plazo · 11 · 5% pendientes o en ruta</span></div><div className="grid grid-cols-2 gap-3"><div><span className="text-slate-500">Distancia recorrida</span><b className="block text-lg">4 680 km</b></div><div><span className="text-slate-500">Costo operativo</span><b className="block text-lg">S/ 18 930</b></div></div></div>)}
-        {warehouse && <div id="panel-almacen" className="border border-blue-200 bg-blue-50 p-4 text-xs"><button onClick={() => setWarehouse(null)} className="float-right" aria-label="Cerrar panel de almacén"><X className="size-4" /></button><b className="text-sm">{warehouse}</b>{(() => {
-          // Con datos del back-end: stock y unidades reales; sin ellos, los valores de ejemplo del prototipo
-          const a = mapa?.almacenes.find(x => (NOMBRE_ALMACEN[x.codigo] ?? x.codigo) === warehouse)
-          if (a) return a.pct == null
-            ? <p className="mt-2">Stock <b>ilimitado</b> (no usa semáforo) · {a.vehiculosEnBase} vehículos en base · ({a.x},{a.y}).</p>
-            : <p className="mt-2">Stock: <b>{(a.stock ?? 0).toLocaleString('es-PE')} de {(a.capacidad ?? 0).toLocaleString('es-PE')} unidades · {a.pct} %</b> · <span className={`font-bold ${TEXTO_SEMAFORO[tonoStock(a.pct, u.stock)]}`}>● {{ verde: 'Verde', ambar: 'Ámbar', rojo: 'Rojo' }[tonoStock(a.pct, u.stock)]}</span> · {a.vehiculosEnBase} vehículos en base · ({a.x},{a.y}).</p>
-          return warehouse === 'Almacén central'
-            ? <p className="mt-2">Stock <b>ilimitado</b> (no usa semáforo) · 200 pedidos planificados · 24 unidades por salir.</p>
-            : <p className="mt-2">Stock: <b>680 de 1 000 unidades · 68 %</b> · <span className="font-bold text-emerald-700">● Verde</span> · 36 pedidos por arribar.</p>
-        })()}</div>}
+        {warehouse && <div id="panel-almacen" className="border border-blue-200 bg-blue-50 p-3 text-xs">
+          <div className="flex items-center justify-between gap-2"><b className="text-sm">{warehouse}</b><button onClick={() => { setWarehouse(null); setMarcado(null) }} aria-label="Cerrar panel de almacén"><X className="size-4" /></button></div>
+          {(() => {
+            // Con datos del back-end: stock y unidades reales; sin ellos, los valores de ejemplo del prototipo
+            const a = mapa?.almacenes.find(x => (NOMBRE_ALMACEN[x.codigo] ?? x.codigo) === warehouse)
+            const stock = (pct: number, texto: string) => <>{texto} · <span className={`font-bold ${TEXTO_SEMAFORO[tonoStock(pct, u.stock)]}`}>● {{ verde: 'verde', ambar: 'ámbar', rojo: 'rojo' }[tonoStock(pct, u.stock)]}</span></>
+            const filas: [string, ReactNode][] = a
+              ? [['Stock', a.pct == null ? 'Ilimitado (no usa semáforo)' : stock(a.pct, `${(a.stock ?? 0).toLocaleString('es-PE')} de ${(a.capacidad ?? 0).toLocaleString('es-PE')} u · ${a.pct} %`)],
+                 ['Unidades en base', String(a.vehiculosEnBase)], ['Unidades en ruta', String(a.unidadesFuera)], ['Pedidos por entregar', String(a.pedidosPorEntregar)], ['Ubicación', `(${a.x}, ${a.y})`]]
+              : warehouse === 'Almacén central'
+                ? [['Stock', 'Ilimitado (no usa semáforo)'], ['Pedidos planificados', '200'], ['Unidades por salir', '24']]
+                : [['Stock', stock(68, '680 de 1 000 u · 68 %')], ['Pedidos por arribar', '36']]
+            return <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">{filas.map(([k, v]) => <Fragment key={k}><dt className="text-slate-500">{k}</dt><dd className="font-semibold">{v}</dd></Fragment>)}</dl>
+          })()}
+          <button onClick={() => setMarcado(marcado === warehouse ? null : warehouse)} className="mt-2 flex items-center gap-1 border border-blue-300 bg-white px-2.5 py-1 font-bold text-blue-700"><MapPin className="size-3.5" />{marcado === warehouse ? 'Quitar marca del mapa' : 'Localizar en el mapa'}</button>
+        </div>}
       </div>
     </aside> : <button onClick={() => setPanel(true)} className="absolute left-3 top-3 z-10 flex items-center gap-2 border border-slate-200 bg-white/95 px-3 py-2 text-xs font-bold shadow"><PanelLeftOpen className="size-4" />Panel de control</button>}
 
@@ -617,6 +633,7 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
 }
 
 function Viewer({ state, setState, scenario, replanned, sim, mapa, hora, segReal }: { state: ExecState; setState: (s: ExecState) => void; scenario: Scenario; replanned: boolean; sim: VistaSimulacion | null; mapa: MapaDatos | null; hora: (h: number) => string; segReal: number }) {
+  const [kpisAbiertos, setKpisAbiertos] = useState(() => typeof window === 'undefined' || window.innerWidth >= 768)
   const [buscado, setBuscado] = useState<string | null>(null)
   const disconnected = state === 'disconnected'
   // Si hay una simulación elegida pero sin iniciar, lo que está en ejecución es la operación en tiempo real
@@ -638,12 +655,20 @@ function Viewer({ state, setState, scenario, replanned, sim, mapa, hora, segReal
       {disconnected && <div className="mb-3 flex items-center justify-between gap-2 border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"><b>Desconectada · último estado conocido</b><button onClick={() => setState('running')} className="border border-amber-300 bg-white px-3 py-1.5 font-bold">Reconectar</button></div>}
       <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Visualizador · Solo consulta</p>
       <h2 className="mt-0.5 text-base font-bold">{title}</h2>
-      <p className="mt-1 text-xs text-slate-500">Ejecución en curso: {!sim && mapa ? 'escenario del back-end' : sim ? `${scenarioLabels.five} · ${sim.simulacion.estado.toLowerCase()}` : scenarioLabels[viewingDay ? 'day' : scenario]}. <span className="font-bold text-slate-600">Solo lectura de lo que está en ejecución (día a día o simulación activa); sin acceso a históricas ni acciones de edición.</span></p>
+      <p className="mt-1 hidden text-xs text-slate-500 sm:block">Ejecución en curso: {!sim && mapa ? 'escenario del back-end' : sim ? `${scenarioLabels.five} · ${sim.simulacion.estado.toLowerCase()}` : scenarioLabels[viewingDay ? 'day' : scenario]}. <span className="font-bold text-slate-600">Solo lectura de lo que está en ejecución (día a día o simulación activa); sin acceso a históricas ni acciones de edición.</span></p>
+      {mapa && mapa.incidencias.length > 0 && <div className="mt-3 border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+        <b>Incidencias vigentes ({mapa.incidencias.length})</b>
+        <ul className="mt-1 flex flex-col gap-0.5">{mapa.incidencias.map(i => <li key={i.id}>{i.tipo === 'AVERIA' ? <><Wrench className="mr-1 inline size-3.5" />Avería · {mapa.flota.find(v => v.id === i.vehiculoId)?.codigo ?? `V-${i.vehiculoId}`}</> : <><AlertTriangle className="mr-1 inline size-3.5" />Bloqueo · {i.tramos.length} km</>} · desde {hora(i.instanteH)}{i.finH != null ? ` hasta ${hora(i.finH)}` : ''}</li>)}</ul>
+      </div>}
       {shown === 'collapse' && <div className="mt-3 border border-red-200 bg-red-50 p-3 text-xs text-red-800"><b>Instante del colapso: 11/09/2026 · 16:42</b><p className="mt-1">Pedido causante: PED-137 · (48,34) · resaltado en mapa · demanda pendiente sin capacidad disponible.</p></div>}
     </section>
 
     {/* Indicadores, sobre el mapa */}
-    <div className="absolute bottom-3 left-3 z-10 grid w-[380px] max-w-[calc(100%-1.5rem)] grid-cols-2 gap-2">{kpis.map(([a, b]) => <div key={a} className="border border-slate-200 bg-white/95 p-2.5 shadow"><p className="text-[11px] text-slate-500">{a}</p><b className="mt-0.5 block text-base">{b}</b></div>)}</div>
+    {/* En pantallas pequeñas los indicadores empiezan recogidos para no tapar el mapa */}
+    {kpisAbiertos ? <div className="absolute bottom-3 left-3 z-10 w-[380px] max-w-[calc(100%-1.5rem)]">
+      <button onClick={() => setKpisAbiertos(false)} className="mb-1 border border-slate-200 bg-white/95 px-2.5 py-1 text-[11px] font-bold text-slate-600 shadow">Ocultar indicadores</button>
+<div className="grid grid-cols-2 gap-2">{kpis.map(([a, b]) => <div key={a} className="border border-slate-200 bg-white/95 p-2.5 shadow"><p className="text-[11px] text-slate-500">{a}</p><b className="mt-0.5 block text-base">{b}</b></div>)}</div>
+    </div> : <button onClick={() => setKpisAbiertos(true)} className="absolute bottom-3 left-3 z-10 border border-slate-200 bg-white/95 px-3 py-1.5 text-[11px] font-bold text-slate-700 shadow">Ver indicadores</button>}
   </div>
 }
 

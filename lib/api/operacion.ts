@@ -61,7 +61,7 @@ export interface PedidoRastreo {
 export interface MapaDatos {
   relojH: number
   /** pct: stock disponible en % de la capacidad; null en el almacén central (ilimitado). */
-  almacenes: (AlmacenFisico & { vehiculosEnBase: number; pct: number | null })[]
+  almacenes: (AlmacenFisico & { vehiculosEnBase: number; pct: number | null; unidadesFuera: number; pedidosPorEntregar: number })[]
   /** Solo los vehículos que están recorriendo una ruta en este instante. */
   vehiculos: { id: number; codigo: string; tipo: TipoVehiculo; x: number; y: number; carga: number; capacidad: number }[]
   rutas: { id: number; vehiculoId: number; tipo: TipoVehiculo; puntos: [number, number][]; recorrido: [number, number][] }[]
@@ -149,11 +149,19 @@ export function datosMapa(estado: EstadoOperacion, plan: PlanDistribucion | null
     }
   })
 
-  const almacenes = (estado.fisico?.almacenes ?? []).map(a => ({
-    ...a,
-    vehiculosEnBase: fisicos.filter(v => v.almacenBaseId === a.id && !enRuta.has(v.id)).length,
-    pct: a.central || !a.capacidad ? null : Math.round((a.stock ?? 0) / a.capacidad * 100),
-  }))
+  // Por almacén: unidades suyas que están en ruta y pedidos abiertos que esas rutas aún deben entregar
+  const baseDe = new globalThis.Map(fisicos.map(v => [v.id, v.almacenBaseId]))
+  const abiertosIds = new Set(abiertos.map(p => p.id))
+  const almacenes = (estado.fisico?.almacenes ?? []).map(a => {
+    const porEntregar = new Set(rutasActivas.filter(r => baseDe.get(r.vehiculoId) === a.id).flatMap(r => r.paradas.filter(s => !s.entregado && abiertosIds.has(s.pedidoId)).map(s => s.pedidoId)))
+    return {
+      ...a,
+      vehiculosEnBase: fisicos.filter(v => v.almacenBaseId === a.id && !enRuta.has(v.id)).length,
+      pct: a.central || !a.capacidad ? null : Math.round((a.stock ?? 0) / a.capacidad * 100),
+      unidadesFuera: [...enRuta].filter(id => baseDe.get(id) === a.id).length,
+      pedidosPorEntregar: porEntregar.size,
+    }
+  })
 
   const averiadas = new Set(incidencias.filter(i => i.tipo === 'AVERIA').map(i => i.vehiculoId))
   const flota = fisicos.map(v => ({ id: v.id, codigo: v.codigo, tipo: v.tipo, disponible: v.disponible, enRuta: enRuta.has(v.id), averiada: averiadas.has(v.id) }))
