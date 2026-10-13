@@ -30,7 +30,15 @@ export interface Tramo { x1: number; y1: number; x2: number; y2: number }
 export interface Incidencia { id: number; escenarioId: number; tipo: 'BLOQUEO' | 'AVERIA'; instanteH: number; finH: number | null; vehiculoId: number | null; activa: boolean; descripcion: string | null; tramos: Tramo[] }
 
 export const consultarEstado = (escenarioId: number) => pedir<EstadoOperacion>(`/api/escenarios/${escenarioId}/estado`)
-export const consultarPedidos = (escenarioId: number) => pedir<Pedido[]>(`/api/escenarios/${escenarioId}/pedidos`)
+/** Todos los pedidos del escenario: el back-end entrega como máximo 500 por página (sin límite, solo 100). */
+export async function consultarPedidos(escenarioId: number): Promise<Pedido[]> {
+  const PAGINA = 500, todos: Pedido[] = []
+  for (let desde = 0; ; desde += PAGINA) {
+    const pagina = await pedir<Pedido[]>(`/api/escenarios/${escenarioId}/pedidos?limite=${PAGINA}&desplazamiento=${desde}`)
+    todos.push(...pagina)
+    if (pagina.length < PAGINA) return todos
+  }
+}
 export const listarSimulaciones = () => pedir<VistaSimulacion[]>('/api/simulaciones')
 export const incidenciasVigentes = (escenarioId: number) => pedir<Incidencia[]>(`/api/escenarios/${escenarioId}/incidencias/vigentes`)
 
