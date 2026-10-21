@@ -2,7 +2,7 @@
 // Lo que dibuja el mapa sale de aquí: almacenes y vehículos (estado físico),
 // rutas del plan vigente y pedidos. El front-end no inventa nada de esto.
 
-import { type VistaSimulacion, pedir } from './simulacion'
+import { type Acumulado, type VistaSimulacion, pedir } from './simulacion'
 
 export type TipoVehiculo = 'AUTO' | 'MOTO' | 'BICICLETA'
 
@@ -16,6 +16,7 @@ export interface EstadoOperacion {
   horizonteH: number | null
   ultimoPlanId: number | null
   fisico: { relojH: number; almacenes: AlmacenFisico[]; vehiculos: VehiculoFisico[] } | null
+  acumulado?: Acumulado | null
 }
 
 export interface PuntoTrazado { secuencia: number; x: number; y: number; instanteH: number }
@@ -81,6 +82,8 @@ export interface MapaDatos {
   flota: { id: number; codigo: string; tipo: TipoVehiculo; disponible: boolean; enRuta: boolean; averiada: boolean }[]
   /** Incidencias vigentes en el reloj actual. */
   incidencias: Incidencia[]
+  /** Distancia, costo y entregas realmente acumulados en el escenario (null si el back-end no lo informa). */
+  acumulado: Acumulado | null
   resumen: { pedidosAbiertos: number; vehiculosEnRuta: number; costoPlan: number | null; distanciaPlanKm: number | null; algoritmo: string | null }
 }
 
@@ -175,7 +178,7 @@ export function datosMapa(estado: EstadoOperacion, plan: PlanDistribucion | null
   const flota = fisicos.map(v => ({ id: v.id, codigo: v.codigo, tipo: v.tipo, disponible: v.disponible, enRuta: enRuta.has(v.id), averiada: averiadas.has(v.id) }))
 
   return {
-    relojH: reloj, almacenes, vehiculos, rutas, pedidos: marcas, rastreo, flota, incidencias,
+    relojH: reloj, almacenes, vehiculos, rutas, pedidos: marcas, rastreo, flota, incidencias, acumulado: estado.acumulado ?? null,
     resumen: { pedidosAbiertos: abiertos.length, vehiculosEnRuta: vehiculos.length, costoPlan: plan?.costoTotal ?? null, distanciaPlanKm: plan?.distanciaTotalKm ?? null, algoritmo: plan?.algoritmo ?? null },
   }
 }

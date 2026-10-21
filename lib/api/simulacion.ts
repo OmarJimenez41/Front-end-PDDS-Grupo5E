@@ -14,6 +14,26 @@ export interface Cobertura {
   pedidos: number
   lineasInvalidas: number
   errores: string[]
+  /** Archivos de bloqueos que cubren el periodo y cuántos bloqueos traen (opcionales). */
+  archivosBloqueos?: string[]
+  bloqueos?: number
+}
+
+export type TipoSimulacion = 'CINCO_DIAS' | 'COLAPSO' | 'DIA_A_DIA'
+
+/** Lo realmente recorrido hasta el reloj actual (no lo planificado). Costo = km × costo por km. */
+export interface Acumulado {
+  distanciaKm: number
+  costo: number
+  entregas: number
+  porTipo: Partial<Record<TipoVehiculo, { distanciaKm: number; costo: number; entregas: number }>>
+}
+
+/** Primer pedido que ya no pudo cumplir su plazo (simulación hasta el colapso). */
+export interface Colapso {
+  instanteH: number
+  fecha: string
+  pedido: { id: number; codigo: string; posX: number; posY: number; fechaLimiteH: number } | null
 }
 
 export interface VistaSimulacion {
@@ -36,6 +56,11 @@ export interface VistaSimulacion {
     pedidoIncumplimientoId: number | null
     archivos: string[]
     ultimoError: string | null
+    tipo?: TipoSimulacion
+    /** Instante real de inicio, en UTC ('…Z'). */
+    inicioReal?: string
+    /** Segundos reales ejecutados, sin contar pausas ni el servidor apagado. */
+    segundosEjecutados?: number
   }
   fechaInicio: string
   fechaFin: string
@@ -45,6 +70,22 @@ export interface VistaSimulacion {
   progreso: number
   eventosPendientes: number | null
   pedidos: { incorporados: number; entregados: number; entregadosATiempo: number; noEntregados: number; abiertos: number }
+  acumulado?: Acumulado | null
+  /** null mientras no colapse; solo en la simulación hasta el colapso. */
+  colapso?: Colapso | null
+}
+
+/** Operación día a día: escenario en tiempo real, siempre activo; el back-end lo crea la primera vez. */
+export interface OperacionActual {
+  escenarioId: number
+  fechaBase: string
+  relojH: number
+  fechaHora: string
+  estado: string
+  estadoMotor: string
+  inicioReal: string | null
+  ultimoError: string | null
+  pedidos: VistaSimulacion['pedidos']
 }
 
 export type TipoVehiculo = 'AUTO' | 'MOTO' | 'BICICLETA'
@@ -134,6 +175,17 @@ export function iniciarCincoDias(fechaHoraInicio: string, duracionRealMin = DURA
   })
 }
 
+/** Inicia la simulación hasta el colapso; `duracionRealMin` fija el ritmo (lo que tardarían cinco días simulados). */
+export function iniciarColapso(fechaHoraInicio: string, duracionRealMin = DURACION_REAL_MIN) {
+  return pedir<VistaSimulacion>('/api/simulaciones/colapso', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fechaHoraInicio: sinZona(fechaHoraInicio), duracionRealMin }),
+  })
+}
+
+export const operacionActual = () => pedir<OperacionActual>('/api/operacion/actual')
+
 export function consultarSimulacion(escenarioId: number) {
   return pedir<VistaSimulacion>(`/api/simulaciones/${escenarioId}`)
 }
@@ -155,6 +207,13 @@ export function subirVentas(archivo: File) {
   const datos = new FormData()
   datos.append('archivo', archivo, archivo.name)
   return pedir<{ guardadoComo: string; pedidos: number; lineasInvalidas: number }>('/api/simulaciones/archivos-ventas', { method: 'POST', body: datos })
+}
+
+/** Carga un archivo mensual de bloqueos `aaaamm.bloqueadas` (multipart, campo `archivo`). */
+export function subirBloqueos(archivo: File) {
+  const datos = new FormData()
+  datos.append('archivo', archivo, archivo.name)
+  return pedir<{ guardadoComo: string; bloqueos: number; lineasInvalidas: number; errores: string[] }>('/api/simulaciones/archivos-bloqueos', { method: 'POST', body: datos })
 }
 
 export function estadoEscenario(escenarioId: number) {
