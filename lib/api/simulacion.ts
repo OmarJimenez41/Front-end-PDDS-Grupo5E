@@ -209,11 +209,31 @@ export function subirVentas(archivo: File) {
   return pedir<{ guardadoComo: string; pedidos: number; lineasInvalidas: number }>('/api/simulaciones/archivos-ventas', { method: 'POST', body: datos })
 }
 
-/** Carga un archivo mensual de bloqueos `aaaamm.bloqueadas` (multipart, campo `archivo`). */
-export function subirBloqueos(archivo: File) {
+/** Archivo de datos guardado en el back-end; `leidos` son los registros que usará la simulación. */
+export interface ArchivoDatos {
+  tipo: 'VENTAS' | 'BLOQUEOS' | 'MANTENIMIENTO'
+  nombre: string
+  periodo: string
+  bytes: number
+  registrosEnArchivo: number
+  leidos: number
+  invalidos: number
+  completo: boolean
+  errores: string[]
+}
+
+/** Lo que cargó un .zip: los archivos de datos y las entradas que no lo son (p. ej. desktop.ini). */
+export interface PaqueteDatos { archivos: ArchivoDatos[]; omitidos: string[] }
+
+/**
+ * Sube un archivo de datos (ventas, bloqueos `bloqueo.AAMM.txt` o mantenimiento) o un .zip con varios,
+ * como el `bloqueos.v20260909.zip` del curso. El back-end reconoce el tipo por el nombre.
+ */
+export async function subirDatos(archivo: File): Promise<PaqueteDatos> {
   const datos = new FormData()
   datos.append('archivo', archivo, archivo.name)
-  return pedir<{ guardadoComo: string; bloqueos: number; lineasInvalidas: number; errores: string[] }>('/api/simulaciones/archivos-bloqueos', { method: 'POST', body: datos })
+  const r = await pedir<ArchivoDatos | PaqueteDatos>('/api/datos/archivos', { method: 'POST', body: datos })
+  return 'archivos' in r ? r : { archivos: [r], omitidos: [] }
 }
 
 export function estadoEscenario(escenarioId: number) {

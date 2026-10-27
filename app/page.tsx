@@ -3,7 +3,7 @@
 import { Fragment, type ReactNode, createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Bike, CalendarDays, Car, Check, ChevronDown, Clock, Gauge, Play, Upload, ChevronLeft, FileText, MapPin, Navigation, Package, PanelLeftOpen, Search, Settings2, Truck, Warehouse, Wrench, X } from 'lucide-react'
 import { type EstadoPedido, type MapaDatos, type PedidoRastreo, type TipoVehiculo, type Pedido, type Tramo, type Umbrales, UMBRALES_PEDIDO, consultarMapa, consultarPedidos, semaforo, levantarIncidencia, listarSimulaciones, registrarAveria, registrarBloqueo, registrarPedido, tramosEntre } from '@/lib/api/operacion'
-import { type Cobertura, type OperacionActual, type VistaSimulacion, consultarSimulacion, detenerSimulacion, iniciarCincoDias, iniciarColapso, mensajeError, operacionActual, pausarSimulacion, reanudarSimulacion, subirBloqueos, subirVentas, validarCobertura } from '@/lib/api/simulacion'
+import { type Cobertura, type OperacionActual, type VistaSimulacion, consultarSimulacion, detenerSimulacion, iniciarCincoDias, iniciarColapso, mensajeError, operacionActual, pausarSimulacion, reanudarSimulacion, subirDatos, subirVentas, validarCobertura } from '@/lib/api/simulacion'
 
 type Role = 'registrador' | 'operador' | 'visualizador'
 type Scenario = 'day' | 'five' | 'collapse'
@@ -438,11 +438,20 @@ function ScenarioSelect({ scenario, onStart }: { scenario: Scenario; onStart: (t
     try { const r = await subirVentas(archivo); setSubida({ ok: true, texto: `${archivo.name} guardado como ${r.guardadoComo}: ${r.pedidos} pedidos${r.lineasInvalidas > 0 ? ` · ${r.lineasInvalidas} líneas inválidas ignoradas` : ''}.` }); setSubidas(n => n + 1) }
     catch (e) { setSubida({ ok: false, texto: mensajeError(e) }) }
   }
-  // Bloqueos planificados del curso (aaaamm.bloqueadas): opcionales; sin archivo la simulación corre sin bloqueos
+  // Bloqueos planificados del curso: el .zip completo (bloqueo.AAMM.txt por mes) o un archivo suelto.
+  // Son opcionales; sin ellos la simulación corre sin bloqueos planificados
   const subirB = async (archivo: File | undefined) => {
     if (!archivo) return
     setSubida({ ok: true, texto: `Subiendo ${archivo.name}…` })
-    try { const r = await subirBloqueos(archivo); setSubida({ ok: true, texto: `${archivo.name} guardado como ${r.guardadoComo}: ${r.bloqueos} bloqueos${r.lineasInvalidas > 0 ? ` · ${r.lineasInvalidas} líneas inválidas ignoradas` : ''}.` }); setSubidas(n => n + 1) }
+    try {
+      const r = await subirDatos(archivo)
+      const b = r.archivos.filter(a => a.tipo === 'BLOQUEOS')
+      const bloqueos = b.reduce((n, a) => n + a.leidos, 0), invalidos = b.reduce((n, a) => n + a.invalidos, 0)
+      const otros = r.archivos.length - b.length
+      setSubida({ ok: b.length > 0, texto: b.length === 0 ? `${archivo.name} no trae archivos de bloqueos (bloqueo.AAMM.txt).`
+        : `${archivo.name}: ${b.length === 1 ? b[0].nombre : `${b.length} archivos`} · ${bloqueos.toLocaleString('es-PE')} bloqueos cargados${invalidos > 0 ? ` · ${invalidos} líneas inválidas ignoradas` : ''}${otros > 0 ? ` · ${otros} archivos de otros datos` : ''}${r.omitidos.length > 0 ? ` · omitidos: ${r.omitidos.join(', ')}` : ''}.` })
+      setSubidas(n => n + 1)
+    }
     catch (e) { setSubida({ ok: false, texto: mensajeError(e) }) }
   }
   // CU-02: al elegir la fecha se consulta si los archivos de ventas cubren los cinco días
@@ -485,7 +494,7 @@ function ScenarioSelect({ scenario, onStart }: { scenario: Scenario; onStart: (t
         : <p className="text-emerald-700">Datos de ventas: {coverage.archivos.join(' + ') || '—'} · {coverage.pedidos} pedidos en los primeros 5 días{coverage.lineasInvalidas > 0 ? ` · ${coverage.lineasInvalidas} líneas inválidas ignoradas` : ''}. {coverage.bloqueos ? `Bloqueos: ${coverage.bloqueos} (${(coverage.archivosBloqueos ?? []).join(' + ')}).` : 'Sin archivo de bloqueos: corre sin bloqueos planificados.'}</p>)}
       {coverageError && <p className="font-semibold text-amber-700">{coverageError}</p>}
       <label className="flex cursor-pointer items-center gap-2 self-start border border-slate-300 bg-white px-3 py-1.5 font-bold text-slate-700 hover:border-slate-400"><Upload className="size-3.5" />Subir archivo de ventas<input type="file" className="sr-only" onChange={e => { subir(e.target.files?.[0]); e.target.value = '' }} /></label>
-      <label className="flex cursor-pointer items-center gap-2 self-start border border-slate-300 bg-white px-3 py-1.5 font-bold text-slate-700 hover:border-slate-400"><Upload className="size-3.5" />Subir archivo de bloqueos<input type="file" className="sr-only" onChange={e => { subirB(e.target.files?.[0]); e.target.value = '' }} /></label>
+      <label className="flex cursor-pointer items-center gap-2 self-start border border-slate-300 bg-white px-3 py-1.5 font-bold text-slate-700 hover:border-slate-400"><Upload className="size-3.5" />Subir bloqueos (.zip o archivo)<input type="file" accept=".zip,.txt,.bloqueadas" className="sr-only" onChange={e => { subirB(e.target.files?.[0]); e.target.value = '' }} /></label>
       {subida && <p role={subida.ok ? 'status' : 'alert'} className={subida.ok ? 'text-slate-600' : 'font-semibold text-red-700'}>{subida.texto}</p>}
     </div>
     {/* Acción principal de la pestaña: es el único botón lleno y grande del panel */}
