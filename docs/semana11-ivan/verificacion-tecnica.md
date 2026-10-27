@@ -1,0 +1,26 @@
+# Comprobaciones técnicas
+
+El 27 de octubre de 2026 se ejecutaron desde el frontend:
+
+- `npx --yes --package pnpm@10.17.1 pnpm exec tsc --noEmit`: correcto, sin errores de tipos.
+- `npx --yes --package pnpm@10.17.1 pnpm build`: correcto. Next indica que omite la validación de tipos durante el build; la comprobación anterior se ejecutó por separado.
+- `node tests/lectura-operacion.cjs`: correcto; cubre lectura serializada, respuestas tardías, paginación, asociaciones, semáforos, orden, cámara y geometría certificada. La opción `SEMANA11_API_TEST=1` consulta adicionalmente la base local de prueba.
+- Backend: `MotorEscenarioTest`, 19 pruebas correctas. Incluye conservación del diagnóstico `ERROR` en consultas repetidas, reanudación explícita y recuperación de `INTERRUMPIDA` tras reinicio.
+- Tras integrar los commits remotos del backend, se ejecutaron `MotorEscenarioTest` y `VentasYRelojTest`: 28 pruebas correctas en total.
+- Prueba HTTP adicional en la base aislada `semana11_error`: se fijó un error controlado en el escenario de prueba 1 y se reinició el backend corregido. Dos consultas a `/api/operacion/actual` devolvieron `ERROR`, el mismo diagnóstico y el mismo reloj; el comando explícito de reanudación devolvió `EJECUTANDO` para el mismo escenario. La instancia de prueba adicional se detuvo después.
+
+Se empleó pnpm 10 mediante `npx` porque el ejecutable predeterminado de este entorno usa pnpm 12 y su instalación automática rechazó un script de `msw`. Estas comprobaciones no sustituyen la aceptación con el entorno compartido ni las regresiones completas de simulación.
+
+En la base local aislada se comprobó que dos consultas de recuperación devolvieron el escenario 1. Al pausar deliberadamente la operación de prueba, `/operacion/actual` informó `PAUSADA` y conservó el identificador; se reanudó inmediatamente y el motor volvió a `EJECUTANDO`. También se registró un bloqueo de prueba (incidencia 9) y se observó en el mapa del operador. Una replanificación dejó una entrega en servicio físico aunque el nuevo plan no tuviera rutas: la asociación se conserva desde `fisico.servicios`. La corrida compartida de 5D sigue pendiente.
+
+Desde el formulario local se registró `REG-MVQXGPUY`; permaneció en la cola tras recargar. Una cantidad fuera del rango del backend produjo un rechazo y el formulario conservó los valores sin confirmar el pedido. Al detener temporalmente el backend de prueba, la interfaz conservó el último estado y deshabilitó el registro; una recarga sin conexión mostró datos no disponibles. Tras reiniciar, se recuperó el escenario 1. Durante la revisión se corrigió una duplicación de paneles por claves React repetidas y se comprobó que ya no quedaban controles duplicados al cambiar de vista.
+
+Dos pestañas independientes, ambas conectadas al backend local, conservaron respectivamente las búsquedas `tm01` y `tb01`. Al ampliar el mapa en la segunda, su escala pasó a 1,25 mientras la primera permaneció en 1. Las búsquedas y la cámara son estado local; cambiar de escenario limpia las selecciones y una unidad ausente produce un aviso. Esta prueba local no acredita todavía acceso a la API desde otro equipo o fuera de localhost.
+
+La cámara se revisó en ventanas de escritorio de distintos tamaños, con rueda, arrastre, ajuste por teclado y pruebas matemáticas de anclaje y límites. Se detectó y corrigió un desplazamiento del icono causado por su etiqueta: para el grupo de unidades en (30,15), el centro medido pasó de aproximadamente (587,9; 575,1) a (597,75; 582,57), frente a (597,76; 582,58) esperado; tras ampliar dos veces, la diferencia siguió por debajo de 0,1 píxeles y la selección de TB01 desde el grupo abrió su ficha. La geometría también prueba dimensiones de 360 × 640 y 1000 × 800.
+
+Se revisaron operador y visualizador también en un panel de navegador de aproximadamente 380 píxeles de ancho. Se movieron los controles del mapa para que no queden bajo los botones inferiores y se hizo plegable el estado del visualizador, dejando accesible la búsqueda. Se comprobaron visualmente zoom, leyenda, descripciones accesibles, apertura de un grupo y ficha de TB01; la ficha puede cerrarse para recuperar el mapa. Esta revisión es local y no sustituye pruebas en dispositivos físicos.
+
+Ensayo local adicional de Día a Día, 27/10/2026: la operación existente conservó el escenario 1 y el catálogo confirmó 37 UT oficiales. Desde el formulario se registró `REG-MVQYFJ51` (pedido 3), que apareció primero pendiente y después en ruta. La versión del mapa pasó de 82 a 84 con el plan 5; TB03 salió de Central y la API informó una posición residual (27,2;14) hacia (28;14), con carga del pedido 3. Se registró desde la interfaz la avería tipo 1 de TA04 (incidencia 10); el mapa alcanzó la versión 86 con plan aplicable 6 y una ruta. Los identificadores y versiones corresponden exclusivamente a esta base local de prueba, no al entorno integrado.
+
+La incidencia vigente de mantenimiento TM06 se mostró con su ventana y sin acción de reparación. Se corrigió además el selector de averías para que no ofreciera TM06 mientras la incidencia esté vigente; se verificó en el navegador con la respuesta del servidor. La finalización del mantenimiento sigue sin verificarse visualmente: la ventana local termina a las 00:00 del día siguiente.

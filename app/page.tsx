@@ -1,9 +1,15 @@
 'use client'
 
 import { Fragment, type ReactNode, createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Bike, CalendarDays, Car, Check, ChevronDown, Clock, Gauge, Play, Upload, ChevronLeft, FileText, MapPin, Navigation, Package, PanelLeftOpen, Search, Settings2, Truck, Warehouse, Wrench, X } from 'lucide-react'
-import { type EstadoPedido, type MapaDatos, type PedidoRastreo, type TipoVehiculo, type Pedido, type Tramo, type Umbrales, UMBRALES_PEDIDO, consultarMapa, consultarPedidos, semaforo, levantarIncidencia, listarSimulaciones, registrarAveria, registrarBloqueo, registrarPedido, tramosEntre } from '@/lib/api/operacion'
-import { type Cobertura, type OperacionActual, type VistaSimulacion, consultarSimulacion, detenerSimulacion, iniciarCincoDias, iniciarColapso, mensajeError, operacionActual, pausarSimulacion, reanudarSimulacion, subirDatos, subirVentas, validarCobertura } from '@/lib/api/simulacion'
+import { AlertTriangle, Bike, Motorbike, CalendarDays, Car, Check, ChevronDown, Clock, Gauge, Play, Upload, ChevronLeft, FileText, MapPin, Navigation, Package, PanelLeftOpen, Search, Settings2, Truck, Warehouse, Wrench, X } from 'lucide-react'
+import { type EstadoPedido, type MapaDatos, type PedidoRastreo, type TipoVehiculo, type Pedido, type Tramo, type Umbrales, UMBRALES_PEDIDO, datosMapa, agruparPosiciones, direccionEn, consultarPedidos, semaforo, levantarIncidencia, listarSimulaciones, registrarAveria, registrarBloqueo, registrarPedido, tramosEntre } from '@/lib/api/operacion'
+import { useOperacion } from '@/lib/operacion/useOperacion'
+import { useMovimiento } from '@/lib/operacion/useMovimiento'
+import { PanelFlota, ocupacion } from '@/components/operacion/PanelFlota'
+import { PanelEnvios } from '@/components/operacion/PanelEnvios'
+import { MapaOperativo } from '@/components/operacion/MapaOperativo'
+import { UmbralesCtx } from '@/components/operacion/umbrales'
+import { type Cobertura, type OperacionActual, type VistaSimulacion, consultarSimulacion, detenerSimulacion, iniciarCincoDias, iniciarColapso, mensajeError, operacionActual, operacionDesdeVista, pausarSimulacion, reanudarSimulacion, subirDatos, subirVentas, validarCobertura } from '@/lib/api/simulacion'
 
 type Role = 'registrador' | 'operador' | 'visualizador'
 type Scenario = 'day' | 'five' | 'collapse'
@@ -11,13 +17,6 @@ type OpMode = 'operacion' | 'simulacion'
 type SimType = 'five' | 'collapse'
 type ExecState = 'idle' | 'running' | 'incident' | 'complete' | 'collapse' | 'disconnected'
 type Vehicle = 'Auto' | 'Moto' | 'Bicicleta'
-type Order = { id: string; customer: string; x: string; y: string; units: string; delivery: 'Regular' | 'Priorizada'; hours: string; entered: string; deadline: string }
-
-const initialOrders: Order[] = [
-  { id: 'PED-001', customer: 'María López', x: '19', y: '29', units: '4', delivery: 'Regular', hours: '36', entered: '08/09 · 08:12', deadline: '09/09 · 20:12' },
-  { id: 'PED-002', customer: 'Carlos Ruiz', x: '35', y: '18', units: '2', delivery: 'Priorizada', hours: '8', entered: '08/09 · 08:20', deadline: '08/09 · 16:20' },
-  { id: 'PED-003', customer: 'Ana Torres', x: '43', y: '7', units: '1', delivery: 'Regular', hours: '36', entered: '08/09 · 08:31', deadline: '09/09 · 20:31' },
-]
 
 const scenarioLabels: Record<Scenario, string> = { day: 'Operación día a día · tiempo real', five: 'Simulación de cinco días', collapse: 'Simulación hasta el colapso logístico' }
 const simLabels: Record<SimType, string> = { five: 'Simulación de cinco días', collapse: 'Simulación hasta el colapso logístico' }
@@ -36,19 +35,19 @@ const simViva = (sim: VistaSimulacion | null) => sim?.simulacion.estado === 'EJE
 
 const stateLabels: Record<ExecState, string> = { idle: 'Lista · sin iniciar', running: 'En ejecución', incident: 'Incidencia activa', complete: 'Periodo completado', collapse: 'Colapso logístico', disconnected: 'Solo consulta · desconectado' }
 
-function Header({ scenario, state, replanned, sim, segReal, escenario }: { scenario: Scenario; state: ExecState; replanned: boolean; sim: VistaSimulacion | null; segReal: number; escenario?: { id: number; relojH: number; dia: boolean; fecha: string } | null }) {
+function Header({ scenario, state, replanned, sim, segReal, escenario, dia }: { scenario: Scenario; state: ExecState; replanned: boolean; sim: VistaSimulacion | null; segReal: number; escenario?: { id: number; relojH: number; dia: boolean; fecha: string } | null; dia?: OperacionActual | null }) {
   const day = state === 'idle' && scenario !== 'day' ? (scenario === 'five' ? 'Sin iniciar · dura 5 días desde el inicio' : 'Sin iniciar · sin límite de periodo') : scenario === 'five' ? (state === 'complete' ? 'Día 5 de 5' : state === 'incident' ? 'Día 3 de 5' : 'Día 2 de 5') : scenario === 'day' ? (replanned && state === 'running' ? '08/09/2026 · 10:45 · plan actualizado' : '08/09/2026 · 08:35') : state === 'collapse' ? '11/09/2026 · 16:42' : 'Sin límite de periodo'
   const incidentView = state === 'incident'
   // La simulación en pausa se ve como tal en todos los dispositivos (el estado viene del back-end)
-  const pausa = sim?.simulacion.estado === 'PAUSADA'
+  const pausa = sim?.simulacion.estado === 'PAUSADA' || (!sim && escenario?.dia && dia?.estadoMotor === 'PAUSADA')
   const collapseView = scenario === 'collapse' && state === 'collapse'
   const fiveDayRunning = scenario === 'five' && state === 'running'
   const headerScenario = !sim && escenario ? (escenario.dia ? scenarioLabels.day : `Escenario ${escenario.id} del back-end`) : sim?.simulacion.tipo === 'COLAPSO' ? scenarioLabels.collapse : collapseView ? 'Simulación hasta el colapso logístico' : incidentView ? (scenario === 'day' ? 'Operación día a día · tiempo real' : 'Simulación de cinco días') : scenarioLabels[scenario]
   // Con una simulación del back-end, la fecha es la que está simulando el servidor (día, hora, minuto y segundo)
   const colapsoReal = sim?.simulacion.tipo === 'COLAPSO'
   const real = sim && scenario !== 'day' ? (colapsoReal ? `Día ${Math.floor((sim.simulacion.relojH - sim.simulacion.inicioH) / 24) + 1} · ${fechaHora(sim.fechaSimulada, true)}` : `Día ${Math.min(5, Math.floor(sim.progreso * 5) + 1)} de 5 · ${fechaHora(sim.fechaSimulada, true)}`) : null
-  const headerDate = real ?? (!sim && escenario ? (escenario.dia ? escenario.fecha : `Hora simulada ${horaSimulada(escenario.relojH)}`) : null) ?? (collapseView ? '11/09/2026 · 16:42' : incidentView ? (scenario === 'day' ? '08/09/2026 · 10:20 · incidencia activa' : 'Día 3 de 5 · 11/09/2026 · 10:20') : fiveDayRunning ? (replanned ? 'Día 3 de 5 · 11/09/2026 · 11:05 · plan actualizado' : 'Día 2 de 5 · 10/09/2026 · 14:35') : day)
-  return <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-2"><div className="flex items-center gap-4"><div className="flex size-9 items-center justify-center bg-blue-700 text-white"><Navigation className="size-5" /></div><div><p className="text-lg font-bold">PaqRap</p><p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Centro de control</p></div><div className="hidden h-8 w-px bg-slate-200 md:block" /><div className="hidden md:block"><p className="text-sm font-bold">{headerScenario}</p><p className="text-xs text-slate-500">{headerDate}</p>{collapseView && !sim && <p className="text-xs font-semibold text-slate-500">Duración total 00:37:26</p>}{incidentView && <p className="text-xs font-semibold text-slate-500">Tiempo transcurrido 00:32:10</p>}{fiveDayRunning && !real && <p className="text-xs font-semibold text-slate-500">Tiempo transcurrido {replanned ? '00:34:50' : '00:18:42'}</p>}{real && sim && <p className="text-xs font-semibold text-slate-700">Tiempo real transcurrido {duracion(segReal)}</p>}{real && sim && <p className="text-xs font-semibold text-slate-500">{colapsoReal ? `Sin fecha de fin · ${sim.simulacion.pedidosIncorporados} pedidos ingresados` : `Avance ${Math.round(sim.progreso * 100)}% · ${sim.simulacion.pedidosIncorporados} de ${sim.simulacion.pedidosProgramados} pedidos ingresados`}</p>}</div></div><p className="flex items-center gap-2 text-[11px] text-slate-500"><span className="font-semibold uppercase tracking-wider">Estado</span><span role="status" className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-bold ${pausa ? 'bg-amber-100 text-amber-800' : state === 'incident' || state === 'collapse' ? 'bg-red-100 text-red-700' : state === 'disconnected' ? 'bg-amber-100 text-amber-800' : state === 'complete' ? 'bg-slate-100 text-slate-600' : 'bg-emerald-100 text-emerald-800'}`}><span className={`size-1.5 rounded-full bg-current ${state === 'running' && !pausa ? 'animate-pulse' : ''}`} />{pausa ? 'En pausa' : stateLabels[state]}</span></p></header>
+  const headerDate = real ?? (!sim && escenario ? (escenario.dia ? escenario.fecha : `Hora simulada ${horaSimulada(escenario.relojH)}`) : null) ?? (scenario === 'day' ? 'Esperando datos de la operación' : day)
+  return <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-2"><div className="flex items-center gap-4"><div className="flex size-9 items-center justify-center bg-blue-700 text-white"><Navigation className="size-5" /></div><div><p className="text-lg font-bold">PaqRap</p><p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Centro de control</p></div><div className="hidden h-8 w-px bg-slate-200 md:block" /><div className="hidden md:block"><p className="text-sm font-bold">{headerScenario}</p><p className="text-xs text-slate-500">{headerDate}</p>{collapseView && !sim && <p className="text-xs font-semibold text-slate-500">Duración total 00:37:26</p>}{incidentView && <p className="text-xs font-semibold text-slate-500">Tiempo transcurrido 00:32:10</p>}{fiveDayRunning && !real && <p className="text-xs font-semibold text-slate-500">Tiempo transcurrido {replanned ? '00:34:50' : '00:18:42'}</p>}{real && sim && <p className="text-xs font-semibold text-slate-700">Tiempo real transcurrido {duracion(segReal)}</p>}{real && sim && <p className="text-xs font-semibold text-slate-500">{colapsoReal ? `Sin fecha de fin · ${sim.simulacion.pedidosIncorporados} pedidos ingresados` : `Avance ${Math.round(sim.progreso * 100)}% · ${sim.simulacion.pedidosIncorporados} de ${sim.simulacion.pedidosProgramados} pedidos ingresados`}</p>}</div></div><p className="flex items-center gap-2 text-[11px] text-slate-500"><span className="font-semibold uppercase tracking-wider">Estado</span><span role="status" className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-bold ${pausa ? 'bg-amber-100 text-amber-800' : state === 'incident' || state === 'collapse' ? 'bg-red-100 text-red-700' : state === 'disconnected' ? 'bg-amber-100 text-amber-800' : state === 'complete' ? 'bg-slate-100 text-slate-600' : 'bg-emerald-100 text-emerald-800'}`}><span className={`size-1.5 rounded-full bg-current ${state === 'running' && !pausa ? 'animate-pulse' : ''}`} />{pausa ? 'En pausa' : !sim && escenario?.dia && dia?.estadoMotor && dia.estadoMotor !== 'EJECUTANDO' ? `Motor: ${dia.estadoMotor}` : stateLabels[state]}</span></p></header>
 }
 
 // Un solo estilo de pestaña para toda la aplicación: las principales (Nav) y las de escenario del operador
@@ -59,26 +58,29 @@ const TAB_OFF = 'border-transparent text-slate-500 hover:text-slate-800'
 
 function Nav({ role, setRole }: { role: Role; setRole: (r: Role) => void }) { return <nav className={`${TAB_BAR} px-2 sm:px-5`}>{[['registrador', 'Registrar pedidos', FileText], ['operador', 'Operar sistema', Settings2], ['visualizador', 'Solo consulta', MapPin]].map(([id, label, Icon]) => <button key={id as string} onClick={() => setRole(id as Role)} className={`${TAB} ${role === id ? TAB_ON : TAB_OFF}`}><Icon className="hidden size-4 sm:block" />{label as string}</button>)}</nav> }
 
-// Reloj del prototipo: los pedidos se registran el 08/09/2026 a las 08:35; la fecha límite es ingreso + plazo
-const deadlineFrom = (hours: number) => { const d = new Date(2026, 8, 8, 8 + hours, 35); const p = (n: number) => String(n).padStart(2, '0'); return `${p(d.getDate())}/${p(d.getMonth() + 1)} · ${p(d.getHours())}:${p(d.getMinutes())}` }
-
-// Registro de pedidos. Con un escenario en curso en el back-end, el pedido entra en él (hora de ingreso = reloj del
-// escenario) y la cola muestra los pedidos reales; sin back-end, se guarda solo en esta pantalla como en el prototipo.
-function Registrar({ orders, setOrders, escenarioId, rastreo, hora, onRegistrado }: { orders: Order[]; setOrders: (o: Order[]) => void; escenarioId: number | null; rastreo: PedidoRastreo[] | null; hora: (h: number) => string; onRegistrado: () => void }) {
+// La cola y la confirmación proceden del servidor.
+function Registrar({ escenarioId, disponible, rastreo, hora, onRegistrado, historialDesactualizado }: { escenarioId: number | null; disponible: boolean; rastreo: PedidoRastreo[] | null; hora: (h: number) => string; onRegistrado: () => void; historialDesactualizado: boolean }) {
   const vacio = { customer: '', x: '', y: '', units: '', delivery: 'Regular' as 'Regular' | 'Priorizada', hours: '36' }
   const [form, setForm] = useState(vacio)
   const [message, setMessage] = useState<{ ok: boolean; texto: string } | null>(null)
   const [enviando, setEnviando] = useState(false)
-  const real = escenarioId != null
+  const real = escenarioId != null && disponible
   const [propios, setPropios] = useState<Pedido[] | null>(null)
+  const [errorPropios, setErrorPropios] = useState('')
   const [recarga, setRecarga] = useState(0)
   useEffect(() => {
-    if (escenarioId == null || rastreo) { setPropios(null); return }
+    setPropios(null); setErrorPropios('')
+    if (escenarioId == null || rastreo) return
     let activo = true
-    const cargar = () => consultarPedidos(escenarioId).then(ps => { if (activo) setPropios(ps) }).catch(() => { /* se reintenta */ })
-    cargar()
-    const t = setInterval(cargar, 5000)
-    return () => { activo = false; clearInterval(t) }
+    const abort = new AbortController()
+    let timer: ReturnType<typeof setTimeout>
+    const cargar = async () => {
+      try { const ps = await consultarPedidos(escenarioId, abort.signal); if (activo) { setPropios(ps); setErrorPropios('') } }
+      catch (e) { if (activo) setErrorPropios(mensajeError(e)) }
+      if (activo) timer = setTimeout(cargar, 10000)
+    }
+    void cargar()
+    return () => { activo = false; abort.abort(); clearTimeout(timer) }
   }, [escenarioId, rastreo == null, recarga])
   const update = (key: string, value: string) => setForm(f => ({ ...f, [key]: value, ...(key === 'delivery' ? { hours: value === 'Regular' ? '36' : f.hours === '36' ? '4' : f.hours } : {}) }))
   const error = (texto: string) => setMessage({ ok: false, texto })
@@ -89,15 +91,10 @@ function Registrar({ orders, setOrders, escenarioId, rastreo, hora, onRegistrado
     if (!Number.isInteger(y) || y < 0 || y > 50) return error('Y debe ser un número entero entre 0 y 50 km.')
     if (!Number.isInteger(u) || u <= 0) return error('Las unidades deben ser un número entero mayor que 0.')
     if (form.delivery === 'Priorizada' && !['4', '8', '12', '18'].includes(form.hours)) return error('Un pedido priorizado tiene plazo de 4, 8, 12 o 18 h.')
-    if (!real) {
-      const id = `PED-${String(orders.length + 1).padStart(3, '0')}`
-      setOrders([...orders, { ...form, id, entered: '08/09 · 08:35', deadline: deadlineFrom(Number(form.hours)) }])
-      setForm(vacio); setMessage({ ok: true, texto: `Pedido ${id} registrado (solo en esta pantalla).` })
-      return
-    }
+    if (!real) return error('No hay una operación disponible. Reintenta la conexión antes de registrar.')
     setEnviando(true); setMessage(null)
     try {
-      const p = await registrarPedido(escenarioId, { cliente: form.customer, x, y, cantidad: u, tipo: form.delivery === 'Regular' ? 'REGULAR' : 'PRIORIZADO', plazoHoras: Number(form.hours) })
+      const p = await registrarPedido(escenarioId!, { cliente: form.customer, x, y, cantidad: u, tipo: form.delivery === 'Regular' ? 'REGULAR' : 'PRIORIZADO', plazoHoras: Number(form.hours) })
       setForm(vacio); setMessage({ ok: true, texto: `Pedido ${p.codigo} registrado · ingreso ${hora(p.horaIngresoH)} · fecha límite ${hora(p.fechaLimiteH)}. Entra en el siguiente plan.` })
       onRegistrado(); setRecarga(n => n + 1)
     } catch (e) { error(mensajeError(e)) } finally { setEnviando(false) }
@@ -112,7 +109,7 @@ function Registrar({ orders, setOrders, escenarioId, rastreo, hora, onRegistrado
       <p className="text-[10px] font-bold uppercase tracking-widest text-blue-600">Registrador de pedidos</p>
       <h2 className="mt-1 text-lg font-bold">Registro de operación día a día</h2>
       <p className="mt-1 text-xs text-slate-500">La fecha y hora de ingreso se asignan automáticamente al confirmar.</p>
-      {!real && <p className="mt-3 border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">No hay una operación en curso en el servidor: los pedidos se guardan solo en esta pantalla, como ejemplo.</p>}
+      {!real && <p className="mt-3 border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">Operación no disponible. No se pueden registrar pedidos hasta recuperar la conexión.</p>}
       <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <label className={label}>Cliente<input value={form.customer} onChange={e => update('customer', e.target.value)} className={input} placeholder="Nombre completo" /></label>
         <label className={label}>Coordenada X<input type="number" value={form.x} onChange={e => update('x', e.target.value)} className={input} placeholder="0–70 km" /></label>
@@ -124,18 +121,19 @@ function Registrar({ orders, setOrders, escenarioId, rastreo, hora, onRegistrado
           : <div className="flex flex-col justify-end gap-2 text-xs font-semibold text-slate-600"><span>Plazo automático</span><div className="border border-slate-100 bg-slate-50 px-3 py-2.5 text-sm">36 horas</div></div>}
       </div>
       <div className="mt-5 flex flex-wrap items-center gap-3">
-        <button onClick={submit} disabled={enviando} className={`px-5 py-2.5 text-sm font-bold text-white ${enviando ? 'cursor-wait bg-slate-400' : 'bg-blue-700'}`}>{enviando ? 'Registrando…' : 'Registrar pedido'}</button>
+        <button onClick={submit} disabled={enviando || !real} className={`px-5 py-2.5 text-sm font-bold text-white ${enviando || !real ? 'cursor-not-allowed bg-slate-400' : 'bg-blue-700'}`}>{enviando ? 'Registrando…' : 'Registrar pedido'}</button>
         {message && <span role={message.ok ? 'status' : 'alert'} className={`text-xs font-semibold ${message.ok ? 'text-emerald-700' : 'text-red-700'}`}>{message.texto}</span>}
       </div>
     </section>
     <section className="border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex items-center justify-between"><div><p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Pedidos registrados</p><h2 className="mt-1 text-lg font-bold">Cola de pedidos ({cola ? cola.length : orders.length})</h2></div><Package className="size-5 text-slate-400" /></div>
+      <div className="flex items-center justify-between"><div><p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Pedidos registrados</p><h2 className="mt-1 text-lg font-bold">Cola de pedidos {cola ? `(${cola.length})` : ''}</h2></div><Package className="size-5 text-slate-400" /></div>
       <div className="mt-4 max-h-[480px] overflow-auto">
+        {historialDesactualizado && rastreo && <p role="status" className="mb-2 text-xs text-amber-800">Último historial conocido; no se pudo actualizar.</p>}
+        {errorPropios && !rastreo && <p role="status" className="mb-2 text-xs text-amber-800">{propios ? 'Últimos pedidos conocidos; actualización fallida.' : 'Historial no disponible.'} {errorPropios}</p>}
         {cola
           ? <table className="w-full min-w-[900px] text-left text-xs"><thead className="sticky top-0 border-y border-slate-200 bg-white text-[10px] uppercase tracking-wider text-slate-400"><tr>{['Código', 'Destino', 'Unidades', 'Entrega', 'Ingreso', 'Fecha/hora límite', 'Estado'].map(h => <th key={h} className="px-3 py-3">{h}</th>)}</tr></thead>
               <tbody>{cola.map(o => <tr key={o.id} className="border-b border-slate-100"><td className="px-3 py-3 font-bold">{o.codigo}</td><td className="px-3 py-3">({o.x}, {o.y}) km</td><td className="px-3 py-3">{o.cantidad}</td><td className="px-3 py-3">{o.tipo === 'PRIORIZADO' ? 'Priorizada' : 'Regular'} · {Math.round(o.fechaLimiteH - o.horaIngresoH)} h</td><td className="px-3 py-3 text-slate-500">{hora(o.horaIngresoH)}</td><td className="px-3 py-3 text-slate-500">{hora(o.fechaLimiteH)}</td><td className="px-3 py-3">{ETIQUETA_ESTADO[o.estado]}</td></tr>)}</tbody></table>
-          : <table className="w-full min-w-[900px] text-left text-xs"><thead className="border-y border-slate-200 text-[10px] uppercase tracking-wider text-slate-400"><tr>{['ID', 'Cliente', 'Coordenadas', 'Unidades', 'Entrega', 'Ingreso', 'Fecha/hora límite'].map(h => <th key={h} className="px-3 py-3">{h}</th>)}</tr></thead>
-              <tbody>{orders.map(o => <tr key={o.id} className="border-b border-slate-100"><td className="px-3 py-3 font-bold">{o.id}</td><td className="px-3 py-3">{o.customer}</td><td className="px-3 py-3">({o.x}, {o.y}) km</td><td className="px-3 py-3">{o.units}</td><td className="px-3 py-3">{o.delivery} · {o.hours} h</td><td className="px-3 py-3 text-slate-500">{o.entered}</td><td className="px-3 py-3 text-slate-500">{o.deadline}</td></tr>)}</tbody></table>}
+          : <p className="text-xs text-slate-500">{real ? 'Cargando pedidos…' : 'Pedidos no disponibles.'}</p>}
       </div>
     </section>
   </div>
@@ -152,144 +150,12 @@ const NOMBRE_ALMACEN: Record<string, string> = { 'ALM-CENTRAL': 'Almacén centra
 const UMBRAL_STOCK = { verde: 50, rojo: 20 }
 const tonoStock = (pct: number, u: Umbrales) => pct >= u.verde ? 'verde' : pct < u.rojo ? 'rojo' : 'ambar'
 // Umbrales vigentes de los dos semáforos: los fija el operador en «Parámetros operativos» y los usan mapa, leyenda y fichas
-const UmbralesCtx = createContext({ pedido: UMBRALES_PEDIDO as Umbrales, stock: UMBRAL_STOCK as Umbrales })
+
 const TEXTO_SEMAFORO = { verde: 'text-emerald-700', ambar: 'text-amber-700', rojo: 'text-red-700' } as const
 const ETIQUETA_ESTADO: Record<EstadoPedido, string> = { PENDIENTE: 'Pendiente de asignar', ASIGNADO: 'Asignado a una ruta', EN_RUTA: 'En ruta', ENTREGADO: 'Entregado', NO_ENTREGADO: 'No entregado' }
 
-// Escena de demostración (sin back-end): mismos almacenes, unidades y pedidos del prototipo
-const DEMO_ALMACENES = [
-  { nombre: 'Almacén central', x: 25, y: 15, central: true, pct: null, enBase: null },
-  { nombre: 'Nor-Oeste', x: 12, y: 38, central: false, pct: 68, enBase: null },
-  { nombre: 'Intermedio Este', x: 55, y: 27, central: false, pct: 68, enBase: null },
-]
-const DEMO_RASTREO: PedidoRastreo[] = ([['PED-002', 19, 29, 'MOTO', 'M-022', 10.1], ['PED-001', 35, 18, 'AUTO', 'V-014', 11.4], ['PED-003', 43, 7, 'BICICLETA', 'B-031', 12.2], ['PED-137', 48, 34, 'AUTO', 'V-014', 13.0], ['PED-140', 66, 42, 'AUTO', 'V-014', 14.6]] as [string, number, number, TipoVehiculo, string, number][])
-  .map(([codigo, x, y, tipo, vehiculo, eta], i): PedidoRastreo => ({ id: i + 1, codigo, x, y, cantidad: 2, tipo: 'REGULAR', estado: 'EN_RUTA', horaIngresoH: 8.5, fechaLimiteH: 44.5, entregadoEnH: null, etaH: eta, vehiculoId: null, vehiculoCodigo: vehiculo, tipoVehiculo: tipo, margenH: 44.5 - eta, semaforo: 'verde' }))
-
-// Con `datos` (escenario real del back-end) el mapa dibuja almacenes, vehículos, rutas y pedidos reales;
-// sin `datos` muestra la escena de demostración del prototipo. `buscado` es el código del pedido que se rastrea.
-function Map({ state, highlightOrderId, full = false, replanned = false, onWarehouse, onPedido, datos, buscado, almacenMarcado }: { state: ExecState; highlightOrderId?: string | null; almacenMarcado?: string | null; full?: boolean; replanned?: boolean; onWarehouse?: (name: string) => void; onPedido?: (codigo: string) => void; datos?: MapaDatos | null; buscado?: string | null }) {
-  const u = useContext(UmbralesCtx)
-  const incident = state === 'incident'
-  const isCollapse = state === 'collapse'
-  const W = 1000, H = 520
-  const p = (x: number, y: number) => `${x / 70 * W},${H - y / 50 * H}`
-  const r = (a: [number, number][]) => a.map(([x, y]) => p(x, y)).join(' ')
-  const pos = (x: number, y: number) => ({ left: `${x / 70 * 100}%`, top: `${100 - y / 50 * 100}%` })
-  const objetivo = buscado ? (datos?.rastreo ?? DEMO_RASTREO).find(q => q.codigo === buscado) ?? null : null
-  const almacenes = datos ? datos.almacenes.map(a => ({ nombre: NOMBRE_ALMACEN[a.codigo] ?? a.codigo, x: a.x, y: a.y, central: a.central, pct: a.pct, enBase: a.vehiculosEnBase as number | null })) : DEMO_ALMACENES
-  const demoPedidos = DEMO_RASTREO.map(q => [q.codigo, q.x, q.y] as const)
-  const averiadas = new Set(datos?.flota.filter(v => v.averiada).map(v => v.id))
-  const hayBloqueo = !!datos?.incidencias.some(i => i.tipo === 'BLOQUEO')
-  return <div className={`${full ? 'absolute inset-0' : 'relative min-h-[480px]'} overflow-hidden bg-[#e9eef0]`}>
-    <svg className="absolute inset-0 size-full" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
-      <rect width={W} height={H} fill="#e9eef0" />
-      {Array.from({ length: 71 }, (_, x) => <path key={`x${x}`} d={`M${x / 70 * W} 0V${H}`} stroke={x % 10 === 0 ? '#9fb0b8' : '#d5dde0'} strokeWidth={x % 10 === 0 ? 1.1 : .5} />)}
-      {Array.from({ length: 51 }, (_, y) => <path key={`y${y}`} d={`M0 ${H - y / 50 * H}H${W}`} stroke={y % 10 === 0 ? '#9fb0b8' : '#d5dde0'} strokeWidth={y % 10 === 0 ? 1.1 : .5} />)}
-      {[0, 10, 20, 30, 40, 50, 60, 70].map(x => <text key={x} x={x / 70 * W + 4} y={H - 8} fill="#475569" fontSize="12" fontWeight="700" style={{ paintOrder: 'stroke', stroke: '#ffffff', strokeWidth: 3 }}>{x}</text>)}
-      {[0, 10, 20, 30, 40, 50].map(y => <text key={y} x="8" y={H - y / 50 * H - 6} fill="#475569" fontSize="12" fontWeight="700" style={{ paintOrder: 'stroke', stroke: '#ffffff', strokeWidth: 3 }}>{y}</text>)}
-      {!datos && <>
-        <polyline points={r([[25, 15], [25, 21], [35, 21], [35, 34], [48, 34], [48, 42], [66, 42]])} fill="none" stroke="#2563eb" strokeWidth="3" opacity="0.85" />
-        <polyline points={r([[12, 38], [12, 29], [19, 29], [19, 18], [35, 18], [35, 7], [43, 7]])} fill="none" stroke="#7c3aed" strokeWidth="3" opacity="0.85" />
-        <polyline points={r([[55, 27], [55, 20], [48, 20], [48, 12], [43, 12], [43, 7]])} fill="none" stroke="#0f9f8d" strokeWidth="3" opacity="0.85" />
-        {(incident || replanned) && <>
-          <polyline points={r([[25, 15], [25, 21], [35, 21], [35, 34], [48, 34]])} fill="none" stroke="#94a3b8" strokeWidth="4.5" strokeDasharray="12 8" />
-          <polyline points={r([[25, 15], [25, 21], [29, 21], [29, 27], [48, 27], [48, 34]])} fill="none" stroke="#2563eb" strokeWidth="4.5" />
-          <polyline points={r([[31, 21], [34, 21], [34, 25]])} fill="none" stroke="#dc2626" strokeWidth="5" />
-        </>}
-      </>}
-      {/* Tramos bloqueados vigentes (incidencias del back-end) */}
-      {datos?.incidencias.filter(i => i.tipo === 'BLOQUEO').flatMap(i => i.tramos.map((t, k) => { const [a, b] = [p(t.x1, t.y1).split(','), p(t.x2, t.y2).split(',')]; return <line key={`${i.id}-${k}`} x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke="#dc2626" strokeWidth="6" strokeLinecap="round"><title>{i.descripcion ?? 'Tramo bloqueado'}</title></line> }))}
-      {datos?.rutas.map(ru => { const marcada = objetivo?.vehiculoId === ru.vehiculoId; return <g key={ru.id}>
-        <polyline points={r(ru.puntos)} fill="none" stroke={COLOR_TIPO[ru.tipo]} strokeWidth={marcada ? 6 : 3} opacity={objetivo && !marcada ? 0.35 : 0.85} />
-        {ru.recorrido.length > 1 && <polyline points={r(ru.recorrido)} fill="none" stroke="#94a3b8" strokeWidth={marcada ? 6.5 : 3.5} strokeDasharray="6 5" />}
-      </g> })}
-    </svg>
-    {!full && <div className="absolute left-4 top-4 bg-white/90 px-3 py-2 text-xs font-bold text-slate-700 shadow"><MapPin className="mr-2 inline size-4 text-blue-600" />Origen (0,0) abajo-izquierda · Cuadrícula 1 km · 70 × 50 km</div>}
-
-    {/* Almacenes: barra y % de stock disponible (el central es ilimitado) y unidades estacionadas en su base */}
-    {almacenes.map(a => <div key={a.nombre} title={`${a.nombre} (${a.x},${a.y}) · ${a.pct == null ? 'stock ilimitado' : `stock ${a.pct}%`}${onWarehouse ? ' · clic para ver detalle' : ''}`} onClick={() => onWarehouse?.(a.nombre)} className={`absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center ${onWarehouse ? 'cursor-pointer transition hover:scale-110' : ''}`} style={pos(a.x, a.y)}>
-      <div className={`flex size-8 items-center justify-center border-2 border-white shadow-md ${a.nombre === almacenMarcado ? 'animate-pulse ring-4 ring-blue-500' : 'ring-1 ring-slate-300'} ${a.central ? 'bg-blue-700' : 'bg-slate-700'} text-white`}><Warehouse className="size-4" /></div>
-      {a.pct != null && <div className="mt-1 h-1.5 w-12 bg-white ring-1 ring-slate-300"><div className={`h-full ${CLASE_SEMAFORO[tonoStock(a.pct, u.stock)]}`} style={{ width: `${a.pct}%` }} /></div>}
-      <span className="mt-1 block whitespace-nowrap bg-white/90 px-1.5 py-0.5 text-[10px] font-bold text-slate-700 shadow-sm">{a.nombre} · {a.pct == null ? <span className="text-blue-700">stock ilimitado</span> : <span className={TEXTO_SEMAFORO[tonoStock(a.pct, u.stock)]}>stock {a.pct}%</span>}</span>
-      {a.enBase != null && <span className="block whitespace-nowrap bg-white/90 px-1.5 text-[10px] font-semibold text-slate-500 shadow-sm">{a.enBase} vehículos en base</span>}
-    </div>)}
-
-    {(datos ? datos.vehiculos.map(v => [ETIQUETA_TIPO[v.tipo], Math.round(v.x * 10) / 10, Math.round(v.y * 10) / 10, v.tipo === 'AUTO' ? Car : Bike, CLASE_TIPO[v.tipo], `${v.codigo} · carga ${v.carga}/${v.capacidad}`, objetivo?.vehiculoId === v.id, averiadas.has(v.id)]) : [['Auto', 35, 34, Car, 'bg-blue-600', 'V-014 · 40 km/h', false, false], ['Moto', 19, 29, Bike, 'bg-violet-600', 'M-022 · 25 km/h', false, false], ['Bicicleta', 48, 12, Bike, 'bg-teal-600', 'B-031 · 12 km/h', false, false]]).map(([name, x, y, Icon, color, detail, marcado, averiado]) => <div key={detail as string} title={`${name} ${detail} · (${x},${y})${averiado ? ' · averiado' : ''}`} className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer transition hover:scale-110" style={pos(x as number, y as number)}>
-      <div className={`flex size-8 items-center justify-center rounded-full ${averiado ? 'bg-red-600' : color as string} text-white shadow-md ring-2 ${marcado ? 'ring-4 ring-blue-300' : averiado ? 'ring-red-200' : 'ring-white'}`}>{(() => { const Icono = averiado ? Wrench : Icon as typeof Car; return <Icono className="size-4" /> })()}</div>
-      <span className={`mt-1 block whitespace-nowrap px-1 text-[10px] font-bold shadow-sm ${averiado ? 'bg-red-700 text-white' : 'bg-white/90 text-slate-700'}`}>{averiado ? `${name} · averiado` : name as string}</span>
-    </div>)}
-
-    {datos ? datos.pedidos.map(pe => { const esBuscado = pe.codigo === buscado; return <div key={pe.id} onClick={() => onPedido?.(pe.codigo)} title={`${pe.codigo} · destino (${pe.x},${pe.y}) · ${pe.cantidad} u · ${ETIQUETA_ESTADO[pe.estado]}${pe.margenH != null ? ` · margen ${pe.margenH.toFixed(1)} h` : ''}${onPedido ? ' · clic para ver la ficha' : ''}`} style={pos(pe.x, pe.y)} className={`absolute -translate-x-1/2 -translate-y-1/2 transition hover:scale-125 ${onPedido ? 'cursor-pointer' : ''} ${esBuscado ? 'z-[5]' : ''}`}>
-      <div className="relative size-3.5">{esBuscado && <div className="absolute -inset-1.5 animate-ping rounded-full bg-blue-500/60" />}<div className={`relative size-3.5 rounded-full border-2 shadow-md ${esBuscado ? 'border-blue-700 ring-2 ring-blue-500' : 'border-white'} ${CLASE_SEMAFORO[semaforo(pe.margenH, u.pedido)]}`} /></div>
-      {(esBuscado || datos.pedidos.length <= 40) && <span className={`mt-1 block whitespace-nowrap px-1 text-[10px] font-bold shadow-sm ${esBuscado ? 'bg-blue-700 text-white' : 'bg-white/90 text-slate-700'}`}>{pe.codigo}</span>}
-    </div> }) : demoPedidos.map(([id, x, y], i) => { const isCause = (highlightOrderId === id) || (isCollapse && id === 'PED-137'); const esBuscado = id === buscado; return <div key={id} onClick={() => onPedido?.(id)} title={`${id} · destino (${x},${y})`} style={pos(x, y)} className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer transition hover:scale-125">
-      <div className={`size-3.5 rounded-full border-2 border-white shadow-md ${isCause ? 'animate-ping bg-red-600' : esBuscado ? 'animate-ping bg-blue-500' : ''}`} />
-      <div className={`absolute inset-0 size-3.5 rounded-full border-2 shadow-md ${esBuscado ? 'border-blue-700' : 'border-white'} ${isCause ? 'bg-red-600' : (incident && i === 3) ? 'bg-amber-500' : 'bg-emerald-600'}`} />
-      <span className={`mt-1 block whitespace-nowrap px-1 text-[10px] font-bold shadow-sm ${isCause ? 'bg-red-700 text-white' : esBuscado ? 'bg-blue-700 text-white' : 'bg-white/90 text-slate-700'}`}>{id}</span>
-      {isCause && <span className="mt-0.5 block whitespace-nowrap bg-red-50 px-1 text-[10px] font-bold text-red-700 shadow">Pedido causante del colapso</span>}
-    </div> })}
-
-    {/* Un pedido ya cerrado no se dibuja entre los abiertos; si es el buscado, se marca igual en su destino */}
-    {datos && objetivo && !datos.pedidos.some(pe => pe.codigo === objetivo.codigo) && <div title={`${objetivo.codigo} · ${ETIQUETA_ESTADO[objetivo.estado]}`} style={pos(objetivo.x, objetivo.y)} className="absolute z-[5] -translate-x-1/2 -translate-y-1/2">
-      <div className="relative size-3.5"><div className="absolute -inset-1.5 animate-ping rounded-full bg-blue-500/60" /><div className="relative size-3.5 rounded-full border-2 border-blue-700 bg-slate-400 shadow-md ring-2 ring-blue-500" /></div>
-      <span className="mt-1 block whitespace-nowrap bg-blue-700 px-1 text-[10px] font-bold text-white shadow-sm">{objetivo.codigo} · {ETIQUETA_ESTADO[objetivo.estado].toLowerCase()}</span>
-    </div>}
-
-    {incident && <div className="absolute left-[45%] top-[32%] bg-red-50 px-3 py-2 text-xs font-bold text-red-700 shadow"><AlertTriangle className="mr-1 inline size-4" />Incidencia detectada · Replanificación en proceso</div>}
-    {isCollapse && highlightOrderId && <div className={`absolute right-4 ${full ? 'top-16' : 'top-4'} bg-red-700 px-3 py-2 text-xs font-bold text-white shadow`}>Localizando {highlightOrderId} · (48,34) · fuera de plazo</div>}
-    <Leyenda full={full} real={!!datos} incident={datos ? hayBloqueo : incident || replanned || isCollapse} averia={averiadas.size > 0} collapse={isCollapse} buscado={!!buscado} />
-  </div>
-}
-
-// Leyenda del mapa: explica cada símbolo que se dibuja; se puede recoger para ver el mapa completo
-function Leyenda({ full, real, incident, averia = false, collapse, buscado }: { full: boolean; real: boolean; incident: boolean; averia?: boolean; collapse: boolean; buscado: boolean }) {
-  const u = useContext(UmbralesCtx)
-  // En pantallas bajas (laptops) empieza recogida para no tapar el mapa
-  const [abierta, setAbierta] = useState(() => typeof window === 'undefined' || window.innerHeight >= 900)
-  const item = 'flex items-center gap-1.5'
-  const titulo = 'w-full text-[9px] font-bold uppercase tracking-wider text-slate-400'
-  const caja = `absolute z-[6] ${full ? 'bottom-9 right-4' : 'bottom-4 left-4'}`
-  if (!abierta) return <button onClick={() => setAbierta(true)} className={`${caja} border border-slate-200 bg-white/95 px-3 py-1.5 text-[11px] font-bold text-slate-700 shadow`}>Ver leyenda</button>
-  return <div className={`${caja} w-[560px] max-w-[calc(100%-2rem)] bg-white/95 px-3 py-2 text-[10px] font-semibold text-slate-700 shadow`}>
-    <div className="flex items-center justify-between gap-2"><span className="text-[11px] font-bold text-slate-800">Leyenda</span><button onClick={() => setAbierta(false)} aria-label="Ocultar leyenda" title="Ocultar leyenda" className="text-slate-400 hover:text-slate-700"><X className="size-3.5" /></button></div>
-    {full && <p className="mt-0.5 text-slate-500"><MapPin className="mr-1 inline size-3 text-blue-600" />Origen (0,0) abajo-izquierda · Cuadrícula 1 km · 70 × 50 km</p>}
-    <div className="mt-1.5 grid gap-x-4 gap-y-1.5 sm:grid-cols-2">
-      <div className="flex flex-wrap gap-x-3 gap-y-1">
-        <span className={titulo}>Almacenes</span>
-        <span className={item}><span className="inline-block size-3 border-2 border-white bg-blue-700 shadow" />Central · stock ilimitado</span>
-        <span className={item}><span className="inline-block size-3 border-2 border-white bg-slate-700 shadow" />Intermedio</span>
-        <span className={item}><span className="flex h-1.5 w-8 bg-white ring-1 ring-slate-300"><span className="h-full w-1/3 bg-emerald-600" /><span className="h-full w-1/3 bg-amber-500" /><span className="h-full w-1/3 bg-red-600" /></span>Stock disponible: verde ≥ {u.stock.verde} % · ámbar · rojo &lt; {u.stock.rojo} %</span>
-        {real && <span className={item}><b>N vehículos en base</b> = unidades estacionadas, sin ruta</span>}
-      </div>
-      <div className="flex flex-wrap gap-x-3 gap-y-1">
-        <span className={titulo}>Vehículos en ruta y su ruta (mismo color)</span>
-        {(Object.keys(ETIQUETA_TIPO) as TipoVehiculo[]).map(t => <span key={t} className={item}><span className={`inline-block size-3 rounded-full ${CLASE_TIPO[t]}`} /><span className="inline-block h-0.5 w-4" style={{ background: COLOR_TIPO[t] }} />{ETIQUETA_TIPO[t]}</span>)}
-        <span className={item}><span className="inline-block h-0 w-5 border-t-2 border-dashed border-slate-400" />{real ? 'Tramo ya recorrido' : 'Ruta anterior'}</span>
-      </div>
-      <div className="flex flex-wrap gap-x-3 gap-y-1">
-        <span className={titulo}>{real ? 'Pedidos abiertos · margen = fecha límite − llegada estimada' : 'Pedidos (destino del cliente)'}</span>
-        {real ? <>
-          <span className={item}><span className="inline-block size-3 rounded-full bg-emerald-600" />Holgado ≥ {u.pedido.verde} h</span>
-          <span className={item}><span className="inline-block size-3 rounded-full bg-amber-500" />Justo</span>
-          <span className={item}><span className="inline-block size-3 rounded-full bg-red-600" />Crítico &lt; {u.pedido.rojo} h</span>
-        </> : <>
-          <span className={item}><span className="inline-block size-3 rounded-full bg-emerald-600" />En plazo</span>
-          {incident && <span className={item}><span className="inline-block size-3 rounded-full bg-amber-500" />Afectado por la incidencia</span>}
-        </>}
-        {buscado && <span className={item}><span className="inline-block size-3 rounded-full border-2 border-blue-700 bg-white ring-2 ring-blue-500" />Pedido buscado</span>}
-      </div>
-      {(incident || averia || collapse) && <div className="flex flex-wrap gap-x-3 gap-y-1">
-        <span className={titulo}>Incidencias</span>
-        {incident && <span className={`${item} text-red-700`}><span className="inline-block h-1 w-5 bg-red-600" />Tramo bloqueado</span>}
-        {averia && <span className={`${item} text-red-700`}><span className="flex size-3.5 items-center justify-center rounded-full bg-red-600 text-white"><Wrench className="size-2.5" /></span>Unidad averiada</span>}
-        {collapse && <span className={`${item} text-red-700`}><span className="inline-block size-3 rounded-full bg-red-600" />Pedido causante del colapso</span>}
-      </div>}
-    </div>
-  </div>
-}
-
 // Buscador de pedidos por código (CU de consulta): resalta el pedido en el mapa y muestra su ficha
-function BuscarPedido({ rastreo, buscado, setBuscado, hora }: { rastreo: PedidoRastreo[]; buscado: string | null; setBuscado: (c: string | null) => void; hora: (h: number) => string }) {
+function BuscarPedido({ rastreo, buscado, setBuscado, hora, onUnidad }: { rastreo: PedidoRastreo[]; buscado: string | null; setBuscado: (c: string | null) => void; hora: (h: number) => string; onUnidad: (id: number) => void }) {
   const [texto, setTexto] = useState('')
   const [lista, setLista] = useState(false)
   const q = texto.trim().toLowerCase()
@@ -306,12 +172,12 @@ function BuscarPedido({ rastreo, buscado, setBuscado, hora }: { rastreo: PedidoR
     {lista && q && ficha?.codigo !== texto && <ul role="listbox" className="absolute left-0 right-0 top-full z-20 mt-1 max-h-72 overflow-y-auto border border-slate-200 bg-white shadow-lg">
       {coincidencias.length === 0 ? <li className="px-3 py-2 text-slate-500">No hay pedidos con «{texto.trim()}».</li> : coincidencias.map(c => <li key={c.id}><button type="button" onClick={() => elegir(c.codigo)} className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-blue-50"><b>{c.codigo}</b><span className="text-slate-500">{ETIQUETA_ESTADO[c.estado]}</span></button></li>)}
     </ul>}
-    {ficha && <FichaPedido p={ficha} hora={hora} onCerrar={limpiar} />}
+    {ficha && <FichaPedido p={ficha} hora={hora} onCerrar={limpiar} onUnidad={onUnidad} />}
     {buscado && !ficha && <p className="mt-1 border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">El pedido {buscado} ya no está en el escenario.</p>}
   </div>
 }
 
-function FichaPedido({ p, hora, onCerrar }: { p: PedidoRastreo; hora: (h: number) => string; onCerrar: () => void }) {
+function FichaPedido({ p, hora, onCerrar, onUnidad }: { p: PedidoRastreo; hora: (h: number) => string; onCerrar: () => void; onUnidad: (id: number) => void }) {
   const u = useContext(UmbralesCtx)
   const cerrado = p.estado === 'ENTREGADO' || p.estado === 'NO_ENTREGADO'
   const plazo = Math.round(p.fechaLimiteH - p.horaIngresoH)
@@ -321,7 +187,7 @@ function FichaPedido({ p, hora, onCerrar }: { p: PedidoRastreo; hora: (h: number
     ['Tipo', `${p.tipo === 'PRIORIZADO' ? 'Priorizado' : 'Regular'} · plazo ${plazo} h`],
     ['Ingreso', hora(p.horaIngresoH)],
     ['Fecha límite', hora(p.fechaLimiteH)],
-    ['Vehículo', p.vehiculoCodigo ? `${p.vehiculoCodigo}${p.tipoVehiculo ? ` · ${ETIQUETA_TIPO[p.tipoVehiculo]}` : ''}` : cerrado ? 'Su ruta ya terminó' : p.estado === 'PENDIENTE' ? 'Sin asignar todavía' : 'Sin ruta en el plan vigente'],
+    ['Rutas y unidades', p.asociaciones.length ? <span key="asociaciones" className="flex flex-col gap-1">{p.asociaciones.map((a, i) => <button key={`${a.rutaId}-${i}`} onClick={() => onUnidad(a.vehiculoId)} className="text-left text-blue-700 underline">{a.rutaId == null ? 'Servicio en curso' : `Ruta ${a.rutaId}`} · {a.vehiculoCodigo ?? 'Unidad no disponible'} · {a.cantidad == null ? 'cantidad no disponible' : `${a.cantidad} u`} · ETA {hora(a.etaH)}{a.entregado ? ' · entregado' : a.enServicio ? ' · en servicio' : ''}</button>)}</span> : cerrado ? 'Sin ruta vigente' : 'Sin asignación'],
     cerrado
       ? ['Entrega', p.entregadoEnH != null ? `${hora(p.entregadoEnH)} · ${p.entregadoEnH <= p.fechaLimiteH ? 'a tiempo' : 'fuera de plazo'}` : 'Sin entregar']
       : ['Llegada estimada', p.etaH != null ? hora(p.etaH) : 'Sin ruta asignada'],
@@ -342,6 +208,7 @@ function Incidencias({ mapa, escenarioId, hora, instanteDemo, onDemo, onCambio, 
   const [tab, setTab] = useState<'averia' | 'bloqueo'>('averia')
   const [unidad, setUnidad] = useState('')
   const [tipo, setTipo] = useState('')
+  const [descripcion, setDescripcion] = useState('')
   const [bloqueo, setBloqueo] = useState({ x1: '', y1: '', x2: '', y2: '', horas: '2', motivo: '' })
   const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null)
   const [busy, setBusy] = useState(false)
@@ -349,18 +216,20 @@ function Incidencias({ mapa, escenarioId, hora, instanteDemo, onDemo, onCambio, 
   const vigentes = mapa?.incidencias ?? []
   const codigoDe = (id: number | null) => mapa?.flota.find(v => v.id === id)?.codigo ?? `V-${id}`
   // Primero las unidades en ruta, que son las que suelen averiarse en plena operación
-  const unidades = real ? mapa.flota.filter(v => !v.averiada).sort((a, b) => Number(b.enRuta) - Number(a.enRuta) || a.codigo.localeCompare(b.codigo)) : []
-  const TIPOS = ['1 · Leve (sigue asignado con penalidad)', '2 · Media (requiere replanificación)', '3 · Grave (fuera de asignación inmediata)']
+  const enMantenimiento = new Set(vigentes.filter(i => i.tipo === 'MANTENIMIENTO').map(i => i.vehiculoId))
+  const unidades = real ? mapa.flota.filter(v => !v.averiada && !enMantenimiento.has(v.id)).sort((a, b) => Number(b.enRuta) - Number(a.enRuta) || a.codigo.localeCompare(b.codigo)) : []
+  const TIPOS = ['1', '2', '3']
   const ejecutar = async (accion: () => Promise<unknown>, ok: string) => {
     setBusy(true); setMsg(null)
-    try { await accion(); setMsg({ ok: true, texto: ok }); onCambio() } catch (e) { setMsg({ ok: false, texto: mensajeError(e) }) } finally { setBusy(false) }
+    try { await accion(); setMsg({ ok: true, texto: ok }); onCambio(); return true } catch (e) { setMsg({ ok: false, texto: mensajeError(e) }); return false } finally { setBusy(false) }
   }
   const confirmarAveria = () => {
     if (!unidad) return setMsg({ ok: false, texto: 'Selecciona la unidad averiada.' })
     if (!tipo) return setMsg({ ok: false, texto: 'Selecciona el tipo de avería 1, 2 o 3.' })
-    if (!real) { onDemo(); onCerrar(); return }
+    if (!real) return setMsg({ ok: false, texto: 'La operación no está disponible.' })
     const v = Number(unidad)
-    ejecutar(() => registrarAveria(escenarioId, v, `Avería tipo ${tipo}`), `Avería de ${codigoDe(v)} registrada. La unidad sale de la flota y se replanifica.`).then(() => { setUnidad(''); setTipo('') })
+    if (!unidades.some(u => u.id === v)) return setMsg({ ok: false, texto: 'La unidad ya no está disponible para registrar una avería. Selecciona otra.' })
+    ejecutar(() => registrarAveria(escenarioId, v, Number(tipo) as 1 | 2 | 3, descripcion.trim()), `Avería de ${codigoDe(v)} registrada.`).then(ok => { if (ok) { setUnidad(''); setTipo(''); setDescripcion('') } })
   }
   const confirmarBloqueo = () => {
     const [x1, y1, x2, y2, horas] = [bloqueo.x1, bloqueo.y1, bloqueo.x2, bloqueo.y2, bloqueo.horas].map(Number)
@@ -369,23 +238,23 @@ function Incidencias({ mapa, escenarioId, hora, instanteDemo, onDemo, onCambio, 
     if (!Number.isFinite(horas) || horas <= 0 || horas > 120) return setMsg({ ok: false, texto: 'La duración debe estar entre 1 y 120 horas.' })
     let tramos: Tramo[]
     try { tramos = tramosEntre(x1, y1, x2, y2) } catch (e) { return setMsg({ ok: false, texto: mensajeError(e) }) }
-    ejecutar(() => registrarBloqueo(escenarioId!, tramos, horas, bloqueo.motivo.trim() || `Bloqueo (${x1},${y1})–(${x2},${y2})`), `Bloqueo de ${tramos.length} km registrado por ${horas} h. Las rutas lo evitan desde el siguiente plan.`).then(() => setBloqueo({ x1: '', y1: '', x2: '', y2: '', horas: '2', motivo: '' }))
+    ejecutar(() => registrarBloqueo(escenarioId!, tramos, horas, bloqueo.motivo.trim() || `Bloqueo (${x1},${y1})–(${x2},${y2})`), `Bloqueo de ${tramos.length} km registrado por ${horas} h.`).then(ok => { if (ok) setBloqueo({ x1: '', y1: '', x2: '', y2: '', horas: '2', motivo: '' }) })
   }
   const field = 'mt-1 w-full border border-slate-200 px-2.5 py-2 font-normal'
   const pestaña = (id: 'averia' | 'bloqueo', texto: string) => <button onClick={() => { setTab(id); setMsg(null) }} className={`border-b-2 px-3 py-2 font-bold ${tab === id ? 'border-red-600 text-red-700' : 'border-transparent text-slate-500'}`}>{texto}</button>
   return <div className="fixed inset-0 z-20 flex items-center justify-center bg-slate-900/30 p-4" onClick={onCerrar}>
     <div className="max-h-full w-full max-w-lg overflow-y-auto border border-slate-200 bg-white p-5 text-xs shadow-xl" onClick={e => e.stopPropagation()}>
-      <div className="flex items-start justify-between gap-2"><div><h3 className="text-lg font-bold">Incidencias</h3><p className="mt-0.5 text-slate-500">Instante registrado por el sistema (no editable): <b>{real ? `${hora(mapa.relojH)} · reloj actual` : instanteDemo}</b></p></div><button onClick={onCerrar} aria-label="Cerrar"><X className="size-4" /></button></div>
+      <div className="flex items-start justify-between gap-2"><div><h3 className="text-lg font-bold">Incidencias</h3><p className="mt-0.5 text-slate-500">Instante registrado por el sistema (no editable): <b>{real ? `${hora(mapa.relojH)} · reloj actual` : 'No disponible'}</b></p></div><button onClick={onCerrar} aria-label="Cerrar"><X className="size-4" /></button></div>
       <div className="mt-3 flex border-b border-slate-200">{pestaña('averia', 'Registrar avería')}{pestaña('bloqueo', 'Registrar bloqueo')}</div>
 
       {tab === 'averia' && <div className="mt-3">
         <label className="flex flex-col font-semibold">Unidad averiada<select value={unidad} onChange={e => setUnidad(e.target.value)} className={field}><option value="">Seleccionar unidad…</option>
-          {real ? unidades.map(v => <option key={v.id} value={v.id}>{v.codigo} · {ETIQUETA_TIPO[v.tipo]} · {v.enRuta ? 'en ruta' : 'en base'}</option>)
-            : ['Auto V-014 · Ruta azul', 'Moto M-022 · Ruta violeta', 'Bicicleta B-031 · Ruta verde'].map(o => <option key={o}>{o}</option>)}
+          {real && unidades.map(v => <option key={v.id} value={v.id}>{v.codigo} · {ETIQUETA_TIPO[v.tipo]} · {v.enRuta ? 'en ruta' : 'en base'}</option>)}
         </select></label>
-        <label className="mt-3 flex flex-col font-semibold">Tipo de avería<select value={tipo} onChange={e => setTipo(e.target.value)} className={field}><option value="">Seleccionar tipo…</option>{TIPOS.map(t => <option key={t}>{t}</option>)}</select></label>
-        {real && <p className="mt-2 text-slate-500">El servidor retira la unidad de la flota disponible y vuelve a planificar sus pedidos. El tipo queda anotado en la incidencia.</p>}
-        <button disabled={busy} onClick={confirmarAveria} className="mt-4 bg-red-700 px-4 py-2 font-bold text-white disabled:bg-slate-400">{busy ? 'Registrando…' : 'Confirmar · marcar fuera de asignación'}</button>
+        <label className="mt-3 flex flex-col font-semibold">Tipo de avería<select value={tipo} onChange={e => setTipo(e.target.value)} className={field}><option value="">Seleccionar tipo…</option>{TIPOS.map(t => <option value={t} key={t}>Tipo {t}</option>)}</select></label>
+        <label className="mt-3 flex flex-col font-semibold">Descripción (opcional)<input maxLength={200} value={descripcion} onChange={e => setDescripcion(e.target.value)} className={field} /></label>
+        {real && <p className="mt-2 text-slate-500">El servidor determina la duración y el tratamiento de la avería.</p>}
+        <button disabled={busy || !real} onClick={confirmarAveria} className="mt-4 bg-red-700 px-4 py-2 font-bold text-white disabled:bg-slate-400">{busy ? 'Registrando…' : 'Confirmar avería'}</button>
       </div>}
 
       {tab === 'bloqueo' && <div className="mt-3">
@@ -402,8 +271,8 @@ function Incidencias({ mapa, escenarioId, hora, instanteDemo, onDemo, onCambio, 
       {real && <div className="mt-5 border-t border-slate-200 pt-3">
         <p className="font-bold text-slate-700">Incidencias vigentes ({vigentes.length})</p>
         {vigentes.length === 0 ? <p className="mt-1 text-slate-500">No hay incidencias activas en este momento.</p> : <ul className="mt-2 flex flex-col gap-1.5">{vigentes.map(i => <li key={i.id} className="flex items-center justify-between gap-2 border border-slate-200 px-2.5 py-1.5">
-          <span>{i.tipo === 'AVERIA' ? <><Wrench className="mr-1 inline size-3.5 text-red-700" /><b>Avería</b> · {codigoDe(i.vehiculoId)}</> : <><AlertTriangle className="mr-1 inline size-3.5 text-red-700" /><b>Bloqueo</b> · {i.tramos.length} km</>} · desde {hora(i.instanteH)}{i.finH != null ? ` hasta ${hora(i.finH)}` : ''}{i.descripcion ? <span className="block text-slate-500">{i.descripcion}</span> : null}</span>
-          <button disabled={busy} onClick={() => ejecutar(() => levantarIncidencia(escenarioId, i.id), i.tipo === 'AVERIA' ? `${codigoDe(i.vehiculoId)} vuelve a estar operativa.` : 'Tramo liberado.')} className="shrink-0 border border-slate-300 px-2 py-1 font-bold text-slate-700">{i.tipo === 'AVERIA' ? 'Unidad reparada' : 'Levantar'}</button>
+          <span>{i.tipo === 'AVERIA' ? <><Wrench className="mr-1 inline size-3.5 text-red-700" /><b>Avería</b> · {codigoDe(i.vehiculoId)}</> : i.tipo === 'MANTENIMIENTO' ? <><Wrench className="mr-1 inline size-3.5" /><b>Mantenimiento</b> · {codigoDe(i.vehiculoId)}</> : <><AlertTriangle className="mr-1 inline size-3.5 text-red-700" /><b>Bloqueo</b> · {i.tramos.length} km</>} · desde {hora(i.instanteH)}{i.finH != null ? ` hasta ${hora(i.finH)}` : ''}{i.descripcion ? <span className="block text-slate-500">{i.descripcion}</span> : null}</span>
+          {i.tipo !== 'MANTENIMIENTO' && <button disabled={busy} onClick={() => ejecutar(() => levantarIncidencia(escenarioId, i.id), 'Incidencia levantada.')} className="shrink-0 border border-slate-300 px-2 py-1 font-bold text-slate-700">{i.tipo === 'AVERIA' ? 'Unidad reparada' : 'Levantar'}</button>}
         </li>)}</ul>}
       </div>}
     </div>
@@ -474,7 +343,7 @@ function ScenarioSelect({ scenario, onStart }: { scenario: Scenario; onStart: (t
 
   if (scenario === 'day') return <section className="text-xs text-slate-600">
     <p className="text-sm font-bold text-slate-900">Operación en tiempo real</p>
-    <p className="mt-1">Es el uso normal del sistema con los pedidos que se registran. Está siempre activa: no hay que iniciarla ni configurarla.</p>
+    <p className="mt-1">Es el uso normal del sistema con los pedidos que se registran. El servidor recupera la operación; su estado se indica en el encabezado.</p>
     <p className="mt-2">Desde aquí puedes registrar <b>incidencias</b>, revisar el <b>rendimiento</b> y el stock de cada almacén.</p>
     <p className="mt-2 text-slate-500">Para probar el sistema con un periodo simulado, usa las pestañas <b>Cinco días</b> o <b>Hasta el colapso</b>.</p>
   </section>
@@ -550,19 +419,15 @@ function CollapseResults({ variant = 'collapse', onLocate, sim, segReal = 0, hor
   </section>
 }
 
-function Operator({ scenario, setScenario, state, setState, replanned, setReplanned, sim, setSim, mapa, escenarioId, onCambio, onUmbrales, hora, segReal }: { mapa: MapaDatos | null; escenarioId: number | null; onCambio: () => void; onUmbrales: (u: { pedido: Umbrales; stock: Umbrales }) => void; hora: (h: number) => string; segReal: number; scenario: Scenario; setScenario: (s: Scenario) => void; state: ExecState; setState: (s: ExecState) => void; replanned: boolean; setReplanned: (r: boolean) => void; sim: VistaSimulacion | null; setSim: (s: VistaSimulacion | null) => void }) {
+function Operator({ scenario, setScenario, state, setState, replanned, setReplanned, sim, setSim, mapa, escenarioId, onCambio, onUmbrales, hora, segReal, unidadSeleccionada, onUnidad, buscado, setBuscado, warehouse, setWarehouse, historialCompleto }: { mapa: MapaDatos | null; escenarioId: number | null; onCambio: () => void; onUmbrales: (u: { pedido: Umbrales; stock: Umbrales }) => void; hora: (h: number) => string; segReal: number; scenario: Scenario; setScenario: (s: Scenario) => void; state: ExecState; setState: (s: ExecState) => void; replanned: boolean; setReplanned: (r: boolean) => void; sim: VistaSimulacion | null; setSim: (s: VistaSimulacion | null) => void; unidadSeleccionada: number | null; onUnidad: (id: number) => void; buscado: string | null; setBuscado: (codigo: string | null) => void; warehouse: string | null; setWarehouse: (nombre: string | null) => void; historialCompleto: boolean }) {
   const u = useContext(UmbralesCtx)
   const [performance, setPerformance] = useState(false)
-  const [warehouse, setWarehouse] = useState<string | null>(null)
-  const [marcado, setMarcado] = useState<string | null>(null)
   const [params, setParams] = useState(false)
   const [breakdown, setBreakdown] = useState(false)
-  const [speeds] = useState({ Auto: '40', Moto: '25', Bicicleta: '12' })
   const [orderLight, setOrderLight] = useState({ verde: String(u.pedido.verde), rojo: String(u.pedido.rojo) })
   const [stockLight, setStockLight] = useState({ verde: String(u.stock.verde), rojo: String(u.stock.rojo) })
   const [paramsMsg, setParamsMsg] = useState('')
   const [highlightOrderId, setHighlightOrderId] = useState<string | null>(null)
-  const [buscado, setBuscado] = useState<string | null>(null)
   // En pantallas pequeñas el panel empieza recogido para no tapar el mapa
   const [panel, setPanel] = useState(() => typeof window === 'undefined' || window.innerWidth >= 768)
   const simActive = scenario !== 'day' && (state === 'running' || state === 'incident')
@@ -601,7 +466,7 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
   }
   const toolButton = 'border bg-white/95 px-3 py-2 text-xs font-bold shadow'
   // Rendimiento con datos reales: cumplimiento contado sobre los pedidos del escenario
-  const rend = mapa ? (() => {
+  const rend = mapa && historialCompleto ? (() => {
     const r = mapa.rastreo, entregados = r.filter(q => q.estado === 'ENTREGADO')
     const aTiempo = entregados.filter(q => q.entregadoEnH != null && q.entregadoEnH <= q.fechaLimiteH).length
     const noEntregados = r.filter(q => q.estado === 'NO_ENTREGADO').length
@@ -610,16 +475,13 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
   const field = 'mt-1 w-full border border-slate-200 bg-white px-2 py-1.5'
   return <div className="relative h-full">
     {/* El mapa ocupa todo el espacio libre; con el panel abierto se corre a su derecha (en pantallas medianas o más) */}
-    <div className={`absolute inset-y-0 right-0 ${panel ? 'left-0 md:left-[412px]' : 'left-0'}`}><Map full state={state} replanned={replanned} highlightOrderId={highlightOrderId} onWarehouse={openWarehouse} onPedido={setBuscado} datos={mapa} buscado={buscado} almacenMarcado={marcado} /></div>
+    <div className={`absolute inset-y-0 right-0 ${panel ? 'left-0 md:left-[412px]' : 'left-0'}`}><MapaOperativo full state={state} replanned={replanned} highlightOrderId={highlightOrderId} onWarehouse={openWarehouse} onPedido={setBuscado} datos={mapa} buscado={buscado} almacenMarcado={warehouse} unidadSeleccionada={unidadSeleccionada} onUnidad={onUnidad} /></div>
 
     {/* Acciones sobre el mapa */}
     <div className="absolute right-3 top-14 z-10 flex max-w-[calc(100%-1.5rem)] flex-wrap items-start justify-end gap-2 md:top-3">
-      <BuscarPedido rastreo={mapa?.rastreo ?? DEMO_RASTREO} buscado={buscado} setBuscado={setBuscado} hora={hora} />
+      <BuscarPedido rastreo={mapa?.rastreo ?? []} buscado={buscado} setBuscado={setBuscado} hora={hora} onUnidad={onUnidad} />
       <button onClick={() => { setParams(!params); setPanel(true) }} className={`${toolButton} ${params ? 'border-blue-600 text-blue-700' : 'border-slate-200'}`}><Settings2 className="mr-1 inline size-4" />Parámetros operativos</button>
       {!simFinished && <button onClick={() => setBreakdown(true)} className={`${toolButton} border-red-200 text-red-700`}><Wrench className="mr-1 inline size-4" />Incidencias{(mapa?.incidencias.length ?? 0) > 0 && <span className="ml-1.5 bg-red-600 px-1.5 text-white">{mapa?.incidencias.length}</span>}</button>}
-      {!mapa && state === 'running' && !replanned && <button onClick={() => { setReplanned(false); setState('incident') }} className={`${toolButton} border-red-200 text-red-700`}>Ver incidencia planificada</button>}
-      {!mapa && state === 'incident' && <button onClick={() => { setReplanned(true); setState('running') }} title="Replanificar no termina la ejecución: la operación continúa" className="bg-blue-700 px-3 py-2 text-xs font-bold text-white shadow">Plan actualizado</button>}
-      {!sim && state === 'running' && scenario === 'collapse' && <button onClick={() => setState('collapse')} className="bg-red-700 px-3 py-2 text-xs font-bold text-white shadow">Simular colapso</button>}
     </div>
 
     {/* Panel de control recogible: el mapa sigue ocupando toda la pantalla */}
@@ -632,9 +494,6 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
         {params && <div className="border border-blue-200 bg-slate-50 p-4 text-xs">
           <div className="flex items-center justify-between"><p className="text-sm font-bold">Parámetros operativos</p><button onClick={() => setParams(false)} aria-label="Cerrar parámetros"><X className="size-4" /></button></div>
-          <p className="mt-3 font-bold text-slate-700">Velocidad promedio (km/h)</p>
-          <div className="mt-1 grid grid-cols-3 gap-2">{(['Auto', 'Moto', 'Bicicleta'] as Vehicle[]).map(v => <label key={v} className="font-semibold">{v}<input type="number" value={speeds[v]} readOnly className={`${field} bg-slate-100 text-slate-500`} /></label>)}</div>
-          <p className="mt-1 text-slate-500">Las fija la flota en el servidor; aquí solo se muestran.</p>
           <p className="mt-4 font-bold text-slate-700">Semáforo de pedidos · margen = fecha/hora límite − ETA (horas)</p>
           <div className="mt-1 grid grid-cols-2 gap-2"><label className="font-semibold text-emerald-700">Verde si margen ≥<input type="number" value={orderLight.verde} onChange={e => setOrderLight({ ...orderLight, verde: e.target.value })} className={field} /></label><label className="font-semibold text-red-700">Rojo si margen &lt;<input type="number" value={orderLight.rojo} onChange={e => setOrderLight({ ...orderLight, rojo: e.target.value })} className={field} /></label></div>
           <p className="mt-1 text-slate-500"><b className="text-amber-700">Ámbar</b> entre {orderLight.rojo || '?'} h y {orderLight.verde || '?'} h. Más margen es más seguro.</p>
@@ -674,9 +533,8 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
         {/* Al terminar, el resumen final reemplaza al panel de rendimiento */}
         <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
           {!simFinished && <button onClick={() => setPerformance(!performance)} aria-expanded={performance} className={`flex items-center gap-1 border px-2.5 py-1.5 font-bold ${performance ? 'border-blue-700 bg-blue-50 text-blue-800' : 'border-slate-200 bg-white'}`}>Rendimiento <ChevronDown className={`size-3.5 ${performance ? 'rotate-180' : ''}`} /></button>}
-          <span className="ml-1 font-semibold text-slate-400">Almacenes</span>
-          {['Almacén central', 'Nor-Oeste', 'Intermedio Este'].map(w => <button key={w} title={`Ver ${w}`} onClick={() => warehouse === w ? setWarehouse(null) : openWarehouse(w)} className={`border px-2.5 py-1.5 font-bold ${warehouse === w ? 'border-blue-700 bg-blue-50 text-blue-800' : 'border-slate-200 bg-white'}`}>{w === 'Almacén central' ? 'Central' : w === 'Intermedio Este' ? 'Este' : w}</button>)}
         </div>
+        <section aria-label="Almacenes" className="border border-slate-200 p-3 text-xs"><h3 className="font-bold">Almacenes</h3>{!mapa ? <p className="mt-1 text-slate-500">Datos no disponibles.</p> : mapa.almacenes.length === 0 ? <p className="mt-1 text-slate-500">Sin almacenes informados.</p> : <ul>{mapa.almacenes.map(a => { const nombre = NOMBRE_ALMACEN[a.codigo] ?? a.codigo; return <li key={a.id} className="border-t py-2"><button onClick={() => openWarehouse(nombre)} className="font-bold text-blue-700 underline">{nombre}</button><span className="ml-2">{a.central ? 'Stock ilimitado' : a.pct == null ? 'Stock no disponible' : <span className={TEXTO_SEMAFORO[tonoStock(a.pct, u.stock)]}>{a.stock} / {a.capacidad} · {a.pct}% · {tonoStock(a.pct, u.stock)}</span>}</span></li> })}</ul>}</section>
         {performance && !simFinished && (rend
           ? <div className="border border-slate-200 bg-white p-3 text-xs">
               <p className="text-slate-500">Cumplimiento · {rend.total} pedidos del escenario</p>
@@ -684,22 +542,19 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
               <p className="mt-2 text-slate-600">Plan vigente: <b>{mapa?.resumen.distanciaPlanKm != null ? `${Math.round(mapa.resumen.distanciaPlanKm).toLocaleString('es-PE')} km` : '—'}</b> · <b>{mapa?.resumen.costoPlan != null ? `S/ ${Math.round(mapa.resumen.costoPlan).toLocaleString('es-PE')}` : '—'}</b></p>
               {mapa?.acumulado ? <p className="mt-1 text-slate-600">Recorrido hasta ahora: <b>{Math.round(mapa.acumulado.distanciaKm).toLocaleString('es-PE')} km</b> · <b>S/ {Math.round(mapa.acumulado.costo).toLocaleString('es-PE')}</b> · {mapa.acumulado.entregas} entregas</p> : <p className="mt-1 text-[10px] text-slate-400">El back-end no informó la distancia ni el costo recorridos.</p>}
             </div>
-          : <div className="grid gap-3 border border-slate-200 bg-white p-4 text-xs"><div><span className="text-slate-500">Cumplimiento</span><b className="block text-lg">184 · 87% dentro de plazo</b><span className="text-slate-600">16 · 8% fuera de plazo · 11 · 5% pendientes o en ruta</span></div><div className="grid grid-cols-2 gap-3"><div><span className="text-slate-500">Distancia recorrida</span><b className="block text-lg">4 680 km</b></div><div><span className="text-slate-500">Costo operativo</span><b className="block text-lg">S/ 18 930</b></div></div></div>)}
+          : <p className="border border-slate-200 bg-white p-4 text-xs text-slate-500">Indicadores no disponibles.</p>)}
         {warehouse && <div id="panel-almacen" className="border border-blue-200 bg-blue-50 p-3 text-xs">
-          <div className="flex items-center justify-between gap-2"><b className="text-sm">{warehouse}</b><button onClick={() => { setWarehouse(null); setMarcado(null) }} aria-label="Cerrar panel de almacén"><X className="size-4" /></button></div>
+          <div className="flex items-center justify-between gap-2"><b className="text-sm">{warehouse}</b><button onClick={() => setWarehouse(null)} aria-label="Cerrar panel de almacén"><X className="size-4" /></button></div>
           {(() => {
             // Con datos del back-end: stock y unidades reales; sin ellos, los valores de ejemplo del prototipo
             const a = mapa?.almacenes.find(x => (NOMBRE_ALMACEN[x.codigo] ?? x.codigo) === warehouse)
             const stock = (pct: number, texto: string) => <>{texto} · <span className={`font-bold ${TEXTO_SEMAFORO[tonoStock(pct, u.stock)]}`}>● {{ verde: 'verde', ambar: 'ámbar', rojo: 'rojo' }[tonoStock(pct, u.stock)]}</span></>
             const filas: [string, ReactNode][] = a
-              ? [['Stock', a.pct == null ? 'Ilimitado (no usa semáforo)' : stock(a.pct, `${(a.stock ?? 0).toLocaleString('es-PE')} de ${(a.capacidad ?? 0).toLocaleString('es-PE')} u · ${a.pct} %`)],
+              ? [['Stock', a.central ? 'Ilimitado (no usa semáforo)' : a.pct == null ? 'No disponible' : stock(a.pct, `${a.stock?.toLocaleString('es-PE')} de ${a.capacidad?.toLocaleString('es-PE')} u · ${a.pct} %`)],
                  ['Unidades en base', String(a.vehiculosEnBase)], ['Unidades en ruta', String(a.unidadesFuera)], ['Pedidos por entregar', String(a.pedidosPorEntregar)], ['Ubicación', `(${a.x}, ${a.y})`]]
-              : warehouse === 'Almacén central'
-                ? [['Stock', 'Ilimitado (no usa semáforo)'], ['Pedidos planificados', '200'], ['Unidades por salir', '24']]
-                : [['Stock', stock(68, '680 de 1 000 u · 68 %')], ['Pedidos por arribar', '36']]
+              : [['Datos', 'No disponibles']]
             return <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">{filas.map(([k, v]) => <Fragment key={k}><dt className="text-slate-500">{k}</dt><dd className="font-semibold">{v}</dd></Fragment>)}</dl>
           })()}
-          <button onClick={() => setMarcado(marcado === warehouse ? null : warehouse)} className="mt-2 flex items-center gap-1 border border-blue-300 bg-white px-2.5 py-1 font-bold text-blue-700"><MapPin className="size-3.5" />{marcado === warehouse ? 'Quitar marca del mapa' : 'Localizar en el mapa'}</button>
         </div>}
       </div>
     </aside> : <button onClick={() => setPanel(true)} className="absolute left-3 top-3 z-10 flex items-center gap-2 border border-slate-200 bg-white/95 px-3 py-2 text-xs font-bold shadow"><PanelLeftOpen className="size-4" />Panel de control</button>}
@@ -708,15 +563,16 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
   </div>
 }
 
-function Viewer({ state, setState, scenario, replanned, sim, mapa, hora, segReal, esDia = false }: { esDia?: boolean; state: ExecState; setState: (s: ExecState) => void; scenario: Scenario; replanned: boolean; sim: VistaSimulacion | null; mapa: MapaDatos | null; hora: (h: number) => string; segReal: number }) {
-  const [kpisAbiertos, setKpisAbiertos] = useState(() => typeof window === 'undefined' || window.innerWidth >= 768)
-  const [buscado, setBuscado] = useState<string | null>(null)
+function Viewer({ state, setState, scenario, replanned, sim, mapa, hora, segReal, esDia = false, unidadSeleccionada, onUnidad, buscado, setBuscado, warehouse, setWarehouse }: { esDia?: boolean; state: ExecState; setState: (s: ExecState) => void; scenario: Scenario; replanned: boolean; sim: VistaSimulacion | null; mapa: MapaDatos | null; hora: (h: number) => string; segReal: number; unidadSeleccionada: number | null; onUnidad: (id: number) => void; buscado: string | null; setBuscado: (codigo: string | null) => void; warehouse: string | null; setWarehouse: (nombre: string | null) => void }) {
+  const [kpisAbiertos, setKpisAbiertos] = useState(false)
+  const [estadoAbierto, setEstadoAbierto] = useState(true)
+  useEffect(() => { if (window.innerWidth < 768) setEstadoAbierto(false) }, [])
   const causante = sim?.colapso?.pedido?.codigo
   useEffect(() => { if (causante) setBuscado(causante) }, [causante])
   const disconnected = state === 'disconnected'
   // Si hay una simulación elegida pero sin iniciar, lo que está en ejecución es la operación en tiempo real
   const viewingDay = scenario === 'day' || state === 'idle'
-  const shown: ExecState = disconnected ? 'complete' : state === 'idle' ? 'running' : state
+  const shown: ExecState = state
   const final = shown === 'complete' || shown === 'collapse'
   const title = disconnected ? 'Solo consulta · desconectado' : shown === 'collapse' ? 'Colapso logístico' : shown === 'complete' ? 'Periodo completado' : shown === 'incident' ? 'Incidencia activa · replanificación en proceso' : 'Estado actual de la operación'
   const c = sim?.pedidos
@@ -728,29 +584,31 @@ function Viewer({ state, setState, scenario, replanned, sim, mapa, hora, segReal
     ['Entregados a tiempo', `${c.entregadosATiempo} · ${porcentaje(c.entregadosATiempo, c.incorporados)}`], ['Pedidos abiertos', String(c.abiertos)], ['Vehículos en ruta', String(mapa?.resumen.vehiculosEnRuta ?? '—')],
     sim.acumulado ? ['Recorrido · costo', `${Math.round(sim.acumulado.distanciaKm).toLocaleString('es-PE')} km · S/ ${Math.round(sim.acumulado.costo).toLocaleString('es-PE')}`] : ['Costo del plan vigente', mapa?.resumen.costoPlan != null ? `S/ ${Math.round(mapa.resumen.costoPlan).toLocaleString('es-PE')}` : '—']] : mapa ? [[esDia ? 'Fecha y hora' : 'Hora simulada', esDia ? hora(mapa.relojH) : horaSimulada(mapa.relojH)], ['Pedidos abiertos', String(mapa.resumen.pedidosAbiertos)], ['Vehículos en ruta', String(mapa.resumen.vehiculosEnRuta)], ['Algoritmo del plan', mapa.resumen.algoritmo ?? 'sin plan'], ['Costo del plan vigente', mapa.resumen.costoPlan != null ? `S/ ${Math.round(mapa.resumen.costoPlan).toLocaleString('es-PE')}` : '—'], ['Distancia del plan', mapa.resumen.distanciaPlanKm != null ? `${Math.round(mapa.resumen.distanciaPlanKm)} km` : '—']] : final ? [['Entregados dentro de plazo', '184 · 87%'], ['Fuera de plazo', '16 · 8%'], ['Pendientes / en ruta', '11 · 5%'], ['Distancia total', '4 680 km'], ['Costo total', 'S/ 18 930'], ['Duración real', '42:18']] : [['Pedidos entregados', '94%'], ['Pendientes', '8'], ['En ruta', '18'], ['Distancia', '2 940 km']]
   return <div className="relative h-full">
-    <Map full replanned={replanned} state={shown} highlightOrderId={shown === 'collapse' && !mapa ? 'PED-137' : null} datos={mapa} buscado={buscado} onPedido={setBuscado} />
+    <MapaOperativo full replanned={replanned} state={shown} highlightOrderId={shown === 'collapse' && !mapa ? 'PED-137' : null} datos={mapa} buscado={buscado} onPedido={setBuscado} unidadSeleccionada={unidadSeleccionada} onUnidad={onUnidad} onWarehouse={setWarehouse} almacenMarcado={warehouse} />
+    {warehouse && <div className="absolute bottom-16 left-3 z-10 border border-blue-200 bg-white p-3 text-xs shadow"><div className="flex gap-4"><b>{warehouse}</b><button onClick={() => setWarehouse(null)} aria-label="Cerrar panel de almacén">Cerrar</button></div>{(() => { const a = mapa?.almacenes.find(x => (NOMBRE_ALMACEN[x.codigo] ?? x.codigo) === warehouse); return a ? <p className="mt-1">{a.central ? 'Stock ilimitado' : a.pct == null ? 'Stock no disponible' : `${a.stock} / ${a.capacidad} · ${a.pct}%`} · ({a.x}, {a.y})</p> : <p>Almacén no disponible.</p> })()}</div>}
 
     {/* Rastrear un pedido: el usuario de consulta busca por código y lo ve en el mapa */}
-    <div className="absolute right-3 top-3 z-10 max-w-[calc(100%-1.5rem)]"><BuscarPedido rastreo={mapa?.rastreo ?? DEMO_RASTREO} buscado={buscado} setBuscado={setBuscado} hora={hora} /></div>
+    <div className="absolute right-3 top-16 z-10 max-w-[calc(100%-1.5rem)] md:top-3"><BuscarPedido rastreo={mapa?.rastreo ?? []} buscado={buscado} setBuscado={setBuscado} hora={hora} onUnidad={onUnidad} /></div>
 
     {/* Estado de la ejecución en curso, sobre el mapa */}
-    <section className="absolute left-3 top-3 z-10 w-[380px] max-w-[calc(100%-1.5rem)] border border-slate-200 bg-white/95 p-4 shadow-lg">
+    {estadoAbierto ? <section className="absolute left-3 top-3 z-10 max-h-[65%] w-[380px] max-w-[calc(100%-1.5rem)] overflow-y-auto border border-slate-200 bg-white/95 p-4 shadow-lg">
+      <button onClick={() => setEstadoAbierto(false)} className="float-right border px-2 py-1 text-xs font-bold" aria-label="Cerrar estado de operación">Cerrar</button>
       {disconnected && <div className="mb-3 flex items-center justify-between gap-2 border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"><b>Desconectada · último estado conocido</b><button onClick={() => setState('running')} className="border border-amber-300 bg-white px-3 py-1.5 font-bold">Reconectar</button></div>}
       <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Visualizador · Solo consulta</p>
       <h2 className="mt-0.5 text-base font-bold">{title}</h2>
-      <p className="mt-1 hidden text-xs text-slate-500 sm:block">Ejecución en curso: {!sim && mapa ? (esDia ? scenarioLabels.day : 'escenario del back-end') : sim ? `${colapsoReal ? scenarioLabels.collapse : scenarioLabels.five} · ${sim.simulacion.estado.toLowerCase()}` : scenarioLabels[viewingDay ? 'day' : scenario]}. <span className="font-bold text-slate-600">Solo lectura de lo que está en ejecución (día a día o simulación activa); sin acceso a históricas ni acciones de edición.</span></p>
+      <p className="mt-1 hidden text-xs text-slate-500 sm:block">Operación consultada: {!sim && mapa ? (esDia ? scenarioLabels.day : 'escenario del back-end') : sim ? `${colapsoReal ? scenarioLabels.collapse : scenarioLabels.five} · ${sim.simulacion.estado.toLowerCase()}` : scenarioLabels[viewingDay ? 'day' : scenario]}. <span className="font-bold text-slate-600">Solo lectura de lo que está en ejecución (día a día o simulación activa); sin acceso a históricas ni acciones de edición.</span></p>
       {mapa && mapa.incidencias.length > 0 && <div className="mt-3 border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
         <b>Incidencias vigentes ({mapa.incidencias.length})</b>
-        <ul className="mt-1 flex flex-col gap-0.5">{mapa.incidencias.map(i => <li key={i.id}>{i.tipo === 'AVERIA' ? <><Wrench className="mr-1 inline size-3.5" />Avería · {mapa.flota.find(v => v.id === i.vehiculoId)?.codigo ?? `V-${i.vehiculoId}`}</> : <><AlertTriangle className="mr-1 inline size-3.5" />Bloqueo · {i.tramos.length} km</>} · desde {hora(i.instanteH)}{i.finH != null ? ` hasta ${hora(i.finH)}` : ''}</li>)}</ul>
+        <ul className="mt-1 flex flex-col gap-0.5">{mapa.incidencias.map(i => <li key={i.id}>{i.tipo === 'AVERIA' || i.tipo === 'MANTENIMIENTO' ? <><Wrench className="mr-1 inline size-3.5" />{i.tipo === 'AVERIA' ? 'Avería' : 'Mantenimiento'} · {mapa.flota.find(v => v.id === i.vehiculoId)?.codigo ?? `V-${i.vehiculoId}`}</> : <><AlertTriangle className="mr-1 inline size-3.5" />Bloqueo · {i.tramos.length} km</>} · desde {hora(i.instanteH)}{i.finH != null ? ` hasta ${hora(i.finH)}` : ''}</li>)}</ul>
       </div>}
       {shown === 'collapse' && (sim?.colapso
         ? <div className="mt-3 border border-red-200 bg-red-50 p-3 text-xs text-red-800"><b>Instante del colapso: {fechaHora(sim.colapso.fecha)}</b>{sim.colapso.pedido && <p className="mt-1">Pedido causante: {sim.colapso.pedido.codigo} · ({sim.colapso.pedido.posX},{sim.colapso.pedido.posY}) · plazo {hora(sim.colapso.pedido.fechaLimiteH)} · resaltado en el mapa.</p>}</div>
         : !sim && <div className="mt-3 border border-red-200 bg-red-50 p-3 text-xs text-red-800"><b>Instante del colapso: 11/09/2026 · 16:42</b><p className="mt-1">Pedido causante: PED-137 · (48,34) · resaltado en mapa · demanda pendiente sin capacidad disponible.</p></div>)}
-    </section>
+    </section> : <button onClick={() => setEstadoAbierto(true)} className="absolute left-3 top-3 z-10 border border-slate-200 bg-white/95 px-3 py-2 text-xs font-bold shadow">Ver estado</button>}
 
     {/* Indicadores, sobre el mapa */}
     {/* En pantallas pequeñas los indicadores empiezan recogidos para no tapar el mapa */}
-    {kpisAbiertos ? <div className="absolute bottom-3 left-3 z-10 w-[380px] max-w-[calc(100%-1.5rem)]">
+    {kpisAbiertos && (mapa || sim) ? <div className="absolute bottom-3 left-3 z-10 w-[380px] max-w-[calc(100%-1.5rem)]">
       <button onClick={() => setKpisAbiertos(false)} className="mb-1 border border-slate-200 bg-white/95 px-2.5 py-1 text-[11px] font-bold text-slate-600 shadow">Ocultar indicadores</button>
 <div className="grid grid-cols-2 gap-2">{kpis.map(([a, b]) => <div key={a} className="border border-slate-200 bg-white/95 p-2.5 shadow"><p className="text-[11px] text-slate-500">{a}</p><b className="mt-0.5 block text-base">{b}</b></div>)}</div>
     </div> : <button onClick={() => setKpisAbiertos(true)} className="absolute bottom-3 left-3 z-10 border border-slate-200 bg-white/95 px-3 py-1.5 text-[11px] font-bold text-slate-700 shadow">Ver indicadores</button>}
@@ -762,44 +620,101 @@ export default function Home() {
   const [scenario, setScenario] = useState<Scenario>('day')
   const [state, setState] = useState<ExecState>('idle')
   const [replanned, setReplanned] = useState(false)
-  const [orders, setOrders] = useState(initialOrders)
   const [sim, setSim] = useState<VistaSimulacion | null>(null)
   const simId = sim?.simulacion.escenarioId
   const simAlive = simViva(sim)
-  const [mapa, setMapa] = useState<MapaDatos | null>(null)
-  const [mapaError, setMapaError] = useState('')
   // ?escenario=N abre un escenario concreto (útil para revisar uno sin simulación o desde otro equipo)
   const [escenarioUrl, setEscenarioUrl] = useState<number | null>(null)
   // Operación día a día: el back-end la mantiene siempre activa en tiempo real
   const [dia, setDia] = useState<OperacionActual | null>(null)
+  const idDia = useRef<number | null>(null)
+  const [errorDia, setErrorDia] = useState('')
+  const [reintentoDia, setReintentoDia] = useState(0)
   useEffect(() => {
     const n = Number(new URLSearchParams(window.location.search).get('escenario'))
     if (Number.isInteger(n) && n > 0) { setEscenarioUrl(n); return }
     // Un segundo dispositivo se engancha a la simulación que ya está corriendo en el servidor
     listarSimulaciones()
       .then(vs => { const v = vs.find(simViva); if (v) { setSim(v); setScenario(v.simulacion.tipo === 'COLAPSO' ? 'collapse' : 'five'); setState('running') } })
-      .catch(() => { /* sin back-end: queda la escena de demostración */ })
-    operacionActual().then(setDia).catch(() => { /* back-end sin operación día a día: escena de demostración */ })
+      .catch(() => { /* La recuperación de la operación informa el error. */ })
   }, [])
+  useEffect(() => {
+    let activo = true
+    let timer: ReturnType<typeof setTimeout>
+    const cargar = async () => {
+      try {
+        const actual = idDia.current === null ? await operacionActual() : operacionDesdeVista(await consultarSimulacion(idDia.current))
+        if (activo) { idDia.current = actual.escenarioId; setDia(actual); setErrorDia('') }
+      }
+      catch (e) { if (activo) setErrorDia(mensajeError(e)) }
+      if (activo) timer = setTimeout(cargar, 2000)
+    }
+    void cargar()
+    return () => { activo = false; clearTimeout(timer) }
+  }, [reintentoDia])
   // Lo que se ve: la simulación (viva o su resultado), el escenario de la URL o, si no, la operación día a día
   const escenarioMapa = simId ?? escenarioUrl ?? dia?.escenarioId ?? null
+  const [seleccionUnidad, setSeleccionUnidad] = useState<{ escenarioId: number; id: number } | null>(null)
+  const [seleccionAlmacen, setSeleccionAlmacen] = useState<{ escenarioId: number; nombre: string } | null>(null)
+  const [buscado, setBuscado] = useState<string | null>(null)
+  const unidadSeleccionada = seleccionUnidad?.escenarioId === escenarioMapa ? seleccionUnidad.id : null
+  const seleccionarUnidad = (id: number | null) => { if (id !== null) setSeleccionAlmacen(null); setSeleccionUnidad(id === null || escenarioMapa === null ? null : { escenarioId: escenarioMapa, id }) }
+  const almacenSeleccionado = seleccionAlmacen?.escenarioId === escenarioMapa ? seleccionAlmacen.nombre : null
+  const seleccionarAlmacen = (nombre: string | null) => { if (nombre !== null) setSeleccionUnidad(null); setSeleccionAlmacen(nombre === null || escenarioMapa === null ? null : { escenarioId: escenarioMapa, nombre }) }
+  useEffect(() => { setSeleccionUnidad(null); setSeleccionAlmacen(null); setBuscado(null) }, [escenarioMapa])
   const esDia = escenarioMapa != null && escenarioMapa === dia?.escenarioId
   const mapaVivo = escenarioMapa != null && (simAlive || escenarioUrl != null || esDia)
+  const operacion = useOperacion(escenarioMapa)
+  const motorActivo = operacion.conexion === 'actual' && (esDia ? !errorDia && dia?.estadoMotor === 'EJECUTANDO' : sim?.simulacion.estado === 'EJECUTANDO')
+  const posicionesVisuales = useMovimiento(operacion.mapa, motorActivo)
   // Tras registrar un pedido o una incidencia se vuelve a consultar el mapa sin esperar al siguiente ciclo
   const [cambios, setCambios] = useState(0)
   const [umbrales, setUmbrales] = useState({ pedido: UMBRALES_PEDIDO as Umbrales, stock: UMBRAL_STOCK as Umbrales })
-  const refrescar = () => setCambios(n => n + 1)
+  const refrescar = () => { setCambios(n => n + 1); operacion.refrescar() }
+  const [historial, setHistorial] = useState<{ escenarioId: number; pedidos: Pedido[] } | null>(null)
+  const [historialError, setHistorialError] = useState<{ escenarioId: number; mensaje: string } | null>(null)
+  const [historialCargando, setHistorialCargando] = useState(true)
   useEffect(() => {
-    if (escenarioMapa == null) { setMapa(null); return }
+    if (escenarioMapa == null) { setHistorial(null); return }
     let activo = true
-    const cargar = () => consultarMapa(escenarioMapa)
-      .then(m => { if (activo) { setMapa(m); setMapaError('') } })
-      .catch(e => { if (activo) setMapaError(mensajeError(e)) })
-    cargar()
-    if (!mapaVivo) return () => { activo = false }
-    const t = setInterval(cargar, 2000)
-    return () => { activo = false; clearInterval(t) }
+    const abort = new AbortController()
+    let timer: ReturnType<typeof setTimeout>
+    const cargar = async () => {
+      if (activo) setHistorialCargando(true)
+      try {
+        const pedidos = await consultarPedidos(escenarioMapa, abort.signal)
+        if (activo) { setHistorial({ escenarioId: escenarioMapa, pedidos }); setHistorialError(null) }
+      } catch (e) { if (activo) setHistorialError({ escenarioId: escenarioMapa, mensaje: mensajeError(e) }) }
+      if (activo) setHistorialCargando(false)
+      if (activo && mapaVivo) timer = setTimeout(cargar, 10000)
+    }
+    void cargar()
+    return () => { activo = false; abort.abort(); clearTimeout(timer) }
   }, [escenarioMapa, mapaVivo, cambios])
+  const mapa = useMemo(() => {
+    const m = operacion.mapa
+    if (!m || !m.fisico) return null
+    const historicos = historial?.escenarioId === m.escenarioId ? historial.pedidos : []
+    const abiertos = new globalThis.Map(m.pedidos.map(p => [p.id, p]))
+    const pedidos = [...historicos.filter(p => !abiertos.has(p.id)), ...m.pedidos]
+    const datos = datosMapa({ escenarioId: m.escenarioId, versionEstado: m.versionEstado, relojH: m.relojH,
+      horizonteH: null, ultimoPlanId: m.plan?.id ?? null, fisico: m.fisico, acumulado: m.acumulado },
+      m.aplicable ? m.plan : null, pedidos, m.incidencias)
+    if (m.aplicable && m.plan) datos.vehiculos = datos.vehiculos.map(v => {
+      const ruta = m.plan?.rutas.find(r => r.vehiculoId === v.id && r.horaInicioH <= m.relojH && m.relojH < r.horaFinH)
+      return { ...v, direccion: ruta ? direccionEn(ruta.trayectoria, m.relojH) : null }
+    })
+    if (operacion.detalle === 'actual' && operacion.unidades) {
+      const detalles = new globalThis.Map(operacion.unidades.unidades.map(u => [u.id, u]))
+      datos.vehiculos = datos.vehiculos.map(v => { const detalle = detalles.get(v.id); return detalle ? { ...v, ocupacionPct: detalle.ocupacionPct, estado: detalle.estado } : v })
+      datos.resumen.vehiculosEnRuta = operacion.unidades.unidades.filter(u => u.estado === 'EN_RUTA' || u.estado === 'EN_SERVICIO').length
+    }
+    if (motorActivo) datos.vehiculos = datos.vehiculos.map(v => posicionesVisuales[v.id] ? { ...v, ...posicionesVisuales[v.id] } : v)
+    return datos
+  }, [operacion.mapa, operacion.detalle, operacion.unidades, historial, posicionesVisuales, motorActivo])
+  const mapaError = operacion.error
+  const historialActual = historial?.escenarioId === escenarioMapa ? historial.pedidos : null
+  const estadoHistorial = historialError?.escenarioId === escenarioMapa ? (historialActual ? 'desactualizado' : 'error') : historialCargando ? 'cargando' : historialActual ? 'actual' : 'cargando'
   // El servidor conduce la simulación; aquí solo se consulta su progreso cada 2 s
   useEffect(() => {
     if (simId == null || !simAlive) return
@@ -843,7 +758,7 @@ export default function Home() {
   // El registrador ingresa pedidos solo para la operación día a día (o el escenario abierto con ?escenario=N)
   const diaRegistro = escenarioUrl ?? dia?.escenarioId ?? null
   const horaRegistro = useMemo(() => dia && diaRegistro === dia.escenarioId ? (h: number) => fechaDesdeBase(dia.fechaBase, h) : hora, [dia, diaRegistro, hora])
-  const effectiveState: ExecState = state === 'idle' && (scenario === 'day' || role === 'visualizador') ? 'running' : state
+  const effectiveState: ExecState = !sim && scenario === 'day' ? (errorDia ? 'disconnected' : dia?.estadoMotor === 'EJECUTANDO' ? 'running' : 'idle') : state === 'idle' && role === 'visualizador' ? 'running' : state
   // Traza de depuración (solo en desarrollo): se ve en la consola del navegador (F12 → Consola).
   useEffect(() => {
     if (process.env.NODE_ENV === 'production') return
@@ -859,14 +774,18 @@ export default function Home() {
   }, [role, scenario, effectiveState, replanned])
   // Operador y visualizador trabajan sobre el mapa a pantalla completa; el registrador es un formulario.
   return <UmbralesCtx.Provider value={umbrales}><main className="flex h-dvh flex-col overflow-hidden bg-white font-sans text-slate-900">
-    <Header scenario={scenario} state={effectiveState} replanned={replanned} sim={sim} segReal={segReal} escenario={mapa && escenarioMapa != null ? { id: escenarioMapa, relojH: mapa.relojH, dia: esDia, fecha: hora(mapa.relojH) } : null} />
+    <Header scenario={scenario} state={effectiveState} replanned={replanned} sim={sim} segReal={segReal} dia={dia} escenario={mapa && escenarioMapa != null ? { id: escenarioMapa, relojH: mapa.relojH, dia: esDia, fecha: hora(mapa.relojH) } : null} />
+    {!sim && scenario === 'day' && (errorDia || (dia && dia.estadoMotor !== 'EJECUTANDO')) && <div role="status" className="border-b border-amber-200 bg-amber-50 px-5 py-2 text-xs text-amber-900">{errorDia ? <>{`Conexión interrumpida: ${errorDia}${dia ? ' · último estado conocido' : ''}`} <button className="ml-2 border border-amber-400 bg-white px-2 py-1 font-bold" onClick={() => setReintentoDia(n => n + 1)}>Reintentar</button></> : `Motor: ${dia?.estadoMotor}${dia?.ultimoError ? ` · ${dia.ultimoError}` : ''}`}</div>}
     <Nav role={role} setRole={setRole} />
     {role === 'registrador'
-      ? <div className="min-h-0 flex-1 overflow-y-auto bg-[#f3f5f6] p-5 md:p-7"><div className="mx-auto max-w-[1500px]"><Registrar orders={orders} setOrders={setOrders} escenarioId={diaRegistro} rastreo={diaRegistro != null && diaRegistro === escenarioMapa ? mapa?.rastreo ?? null : null} hora={horaRegistro} onRegistrado={refrescar} /></div></div>
+      ? <div className="min-h-0 flex-1 overflow-y-auto bg-[#f3f5f6] p-5 md:p-7"><div className="mx-auto max-w-[1500px]"><Registrar escenarioId={diaRegistro} disponible={!errorDia} rastreo={diaRegistro != null && diaRegistro === escenarioMapa && historialActual ? mapa?.rastreo ?? null : null} hora={horaRegistro} onRegistrado={refrescar} historialDesactualizado={estadoHistorial === 'desactualizado'} /></div></div>
       : <div className="relative min-h-0 flex-1">
-          {mapaError && <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 shadow">Mapa sin actualizar: {mapaError}</div>}
-          {role === 'operador' && <Operator onUmbrales={setUmbrales} mapa={mapa} escenarioId={mapaVivo ? escenarioMapa : null} onCambio={refrescar} hora={hora} segReal={segReal} scenario={scenario} setScenario={setScenario} state={scenario === 'day' ? effectiveState : state} setState={setState} replanned={replanned} setReplanned={setReplanned} sim={sim} setSim={setSim} />}
-          {role === 'visualizador' && <Viewer esDia={esDia} sim={sim} mapa={mapa} hora={hora} segReal={segReal} scenario={scenario} state={effectiveState} setState={setState} replanned={replanned} />}
+          {mapaError && <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 shadow">Mapa sin actualizar: {mapaError} <button onClick={refrescar} className="ml-2 border border-amber-400 bg-white px-2 py-1">Reintentar</button></div>}
+          {motorActivo && Object.keys(posicionesVisuales).length > 0 && <div role="status" className="absolute bottom-16 left-1/2 z-20 -translate-x-1/2 bg-white/95 px-2 py-1 text-xs text-slate-700 shadow">Movimiento visual entre lecturas confirmadas</div>}
+          {role === 'operador' && <Operator onUmbrales={setUmbrales} mapa={mapa} escenarioId={mapaVivo ? escenarioMapa : null} onCambio={refrescar} hora={hora} segReal={segReal} scenario={scenario} setScenario={setScenario} state={scenario === 'day' ? effectiveState : state} setState={setState} replanned={replanned} setReplanned={setReplanned} sim={sim} setSim={setSim} unidadSeleccionada={unidadSeleccionada} onUnidad={seleccionarUnidad} buscado={buscado} setBuscado={setBuscado} warehouse={almacenSeleccionado} setWarehouse={seleccionarAlmacen} historialCompleto={historialActual !== null && estadoHistorial === 'actual'} />}
+          {role === 'visualizador' && <Viewer esDia={esDia} sim={sim} mapa={mapa} hora={hora} segReal={segReal} scenario={scenario} state={effectiveState} setState={setState} replanned={replanned} unidadSeleccionada={unidadSeleccionada} onUnidad={seleccionarUnidad} buscado={buscado} setBuscado={setBuscado} warehouse={almacenSeleccionado} setWarehouse={seleccionarAlmacen} />}
+          <PanelFlota key={`flota-${escenarioMapa ?? 'sin-escenario'}`} unidades={operacion.unidades?.unidades ?? null} detalle={operacion.detalle} hora={hora} seleccion={unidadSeleccionada} onSeleccion={seleccionarUnidad} incidencias={operacion.mapa?.incidencias ?? []} onPedido={setBuscado} />
+          <PanelEnvios key={`envios-${escenarioMapa ?? 'sin-escenario'}`} mapa={operacion.mapa} unidades={operacion.detalle === 'actual' ? operacion.unidades : null} historial={historialActual} estadoHistorial={estadoHistorial} estadoMapa={operacion.conexion} hora={hora} onPedido={setBuscado} onUnidad={seleccionarUnidad} />
         </div>}
   </main></UmbralesCtx.Provider>
 }

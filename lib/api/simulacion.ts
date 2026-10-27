@@ -88,6 +88,14 @@ export interface OperacionActual {
   pedidos: VistaSimulacion['pedidos']
 }
 
+/** Proyecta una lectura del motor sin ordenar reanudación ni crear escenarios. */
+export function operacionDesdeVista(v: VistaSimulacion): OperacionActual {
+  const s = v.simulacion
+  return { escenarioId: s.escenarioId, fechaBase: s.fechaBase, relojH: s.relojH, fechaHora: v.fechaSimulada,
+    estado: s.estado === 'EJECUTANDO' ? 'EN_EJECUCION' : s.estado === 'PAUSADA' ? 'PAUSADO' : 'FINALIZADO',
+    estadoMotor: s.estado, inicioReal: s.inicioReal ?? null, ultimoError: s.ultimoError, pedidos: v.pedidos }
+}
+
 export type TipoVehiculo = 'AUTO' | 'MOTO' | 'BICICLETA'
 
 /** Arista certificada del plan: la unidad sale de (x1,y1) en salidaH y llega a (x2,y2) en llegadaH. */
