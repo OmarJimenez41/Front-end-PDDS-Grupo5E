@@ -4,6 +4,11 @@ import { Fragment, type ReactNode, createContext, useContext, useEffect, useMemo
 import { AlertTriangle, Bike, Motorbike, CalendarDays, Car, Check, ChevronDown, Clock, Gauge, Play, Upload, ChevronLeft, FileText, MapPin, Navigation, Package, PanelLeftOpen, Search, Settings2, Truck, Warehouse, Wrench, X } from 'lucide-react'
 import { type EstadoPedido, type MapaDatos, type PedidoRastreo, type TipoVehiculo, type Pedido, type Tramo, type Umbrales, UMBRALES_PEDIDO, datosMapa, agruparPosiciones, direccionEn, consultarPedidos, semaforo, levantarIncidencia, listarSimulaciones, registrarAveria, registrarBloqueo, registrarPedido, tramosEntre } from '@/lib/api/operacion'
 import { useOperacion } from '@/lib/operacion/useOperacion'
+import { consultarEstadoSeleccionado, etiquetaEstadoEscenario } from '@/lib/operacion/estadoEscenario'
+import { unidadesParaAveria } from '@/lib/operacion/unidadesParaAveria'
+import { crearGeneraciones, regresarDeSimulacion, respuestaVigente, sondearSerial } from '@/lib/operacion/simulacionControl'
+import { simulacionDescubrible } from '@/lib/operacion/descubrimiento'
+import { crearRecuperacionDia } from '@/lib/operacion/recuperacionDia'
 import { useMovimiento } from '@/lib/operacion/useMovimiento'
 import { PanelFlota, ocupacion } from '@/components/operacion/PanelFlota'
 import { PanelEnvios } from '@/components/operacion/PanelEnvios'
@@ -35,19 +40,19 @@ const simViva = (sim: VistaSimulacion | null) => sim?.simulacion.estado === 'EJE
 
 const stateLabels: Record<ExecState, string> = { idle: 'Lista · sin iniciar', running: 'En ejecución', incident: 'Incidencia activa', complete: 'Periodo completado', collapse: 'Colapso logístico', disconnected: 'Solo consulta · desconectado' }
 
-function Header({ scenario, state, replanned, sim, segReal, escenario, dia }: { scenario: Scenario; state: ExecState; replanned: boolean; sim: VistaSimulacion | null; segReal: number; escenario?: { id: number; relojH: number; dia: boolean; fecha: string } | null; dia?: OperacionActual | null }) {
+function Header({ scenario, state, replanned, sim, segReal, escenario, dia, estadoUrl, idUrl }: { estadoUrl?: string; idUrl?: number | null; scenario: Scenario; state: ExecState; replanned: boolean; sim: VistaSimulacion | null; segReal: number; escenario?: { id: number; relojH: number; dia: boolean; fecha: string } | null; dia?: OperacionActual | null }) {
   const day = state === 'idle' && scenario !== 'day' ? (scenario === 'five' ? 'Sin iniciar · dura 5 días desde el inicio' : 'Sin iniciar · sin límite de periodo') : scenario === 'five' ? (state === 'complete' ? 'Día 5 de 5' : state === 'incident' ? 'Día 3 de 5' : 'Día 2 de 5') : scenario === 'day' ? (replanned && state === 'running' ? '08/09/2026 · 10:45 · plan actualizado' : '08/09/2026 · 08:35') : state === 'collapse' ? '11/09/2026 · 16:42' : 'Sin límite de periodo'
   const incidentView = state === 'incident'
   // La simulación en pausa se ve como tal en todos los dispositivos (el estado viene del back-end)
   const pausa = sim?.simulacion.estado === 'PAUSADA' || (!sim && escenario?.dia && dia?.estadoMotor === 'PAUSADA')
   const collapseView = scenario === 'collapse' && state === 'collapse'
   const fiveDayRunning = scenario === 'five' && state === 'running'
-  const headerScenario = !sim && escenario ? (escenario.dia ? scenarioLabels.day : `Escenario ${escenario.id} del back-end`) : sim?.simulacion.tipo === 'COLAPSO' ? scenarioLabels.collapse : collapseView ? 'Simulación hasta el colapso logístico' : incidentView ? (scenario === 'day' ? 'Operación día a día · tiempo real' : 'Simulación de cinco días') : scenarioLabels[scenario]
+  const headerScenario = !sim && idUrl != null ? `Escenario ${idUrl} del back-end` : !sim && escenario ? (escenario.dia ? scenarioLabels.day : `Escenario ${escenario.id} del back-end`) : sim?.simulacion.tipo === 'COLAPSO' ? scenarioLabels.collapse : collapseView ? 'Simulación hasta el colapso logístico' : incidentView ? (scenario === 'day' ? 'Operación día a día · tiempo real' : 'Simulación de cinco días') : scenarioLabels[scenario]
   // Con una simulación del back-end, la fecha es la que está simulando el servidor (día, hora, minuto y segundo)
   const colapsoReal = sim?.simulacion.tipo === 'COLAPSO'
   const real = sim && scenario !== 'day' ? (colapsoReal ? `Día ${Math.floor((sim.simulacion.relojH - sim.simulacion.inicioH) / 24) + 1} · ${fechaHora(sim.fechaSimulada, true)}` : `Día ${Math.min(5, Math.floor(sim.progreso * 5) + 1)} de 5 · ${fechaHora(sim.fechaSimulada, true)}`) : null
-  const headerDate = real ?? (!sim && escenario ? (escenario.dia ? escenario.fecha : `Hora simulada ${horaSimulada(escenario.relojH)}`) : null) ?? (scenario === 'day' ? 'Esperando datos de la operación' : day)
-  return <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-2"><div className="flex items-center gap-4"><div className="flex size-9 items-center justify-center bg-blue-700 text-white"><Navigation className="size-5" /></div><div><p className="text-lg font-bold">PaqRap</p><p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Centro de control</p></div><div className="hidden h-8 w-px bg-slate-200 md:block" /><div className="hidden md:block"><p className="text-sm font-bold">{headerScenario}</p><p className="text-xs text-slate-500">{headerDate}</p>{collapseView && !sim && <p className="text-xs font-semibold text-slate-500">Duración total 00:37:26</p>}{incidentView && <p className="text-xs font-semibold text-slate-500">Tiempo transcurrido 00:32:10</p>}{fiveDayRunning && !real && <p className="text-xs font-semibold text-slate-500">Tiempo transcurrido {replanned ? '00:34:50' : '00:18:42'}</p>}{real && sim && <p className="text-xs font-semibold text-slate-700">Tiempo real transcurrido {duracion(segReal)}</p>}{real && sim && <p className="text-xs font-semibold text-slate-500">{colapsoReal ? `Sin fecha de fin · ${sim.simulacion.pedidosIncorporados} pedidos ingresados` : `Avance ${Math.round(sim.progreso * 100)}% · ${sim.simulacion.pedidosIncorporados} de ${sim.simulacion.pedidosProgramados} pedidos ingresados`}</p>}</div></div><p className="flex items-center gap-2 text-[11px] text-slate-500"><span className="font-semibold uppercase tracking-wider">Estado</span><span role="status" className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-bold ${pausa ? 'bg-amber-100 text-amber-800' : state === 'incident' || state === 'collapse' ? 'bg-red-100 text-red-700' : state === 'disconnected' ? 'bg-amber-100 text-amber-800' : state === 'complete' ? 'bg-slate-100 text-slate-600' : 'bg-emerald-100 text-emerald-800'}`}><span className={`size-1.5 rounded-full bg-current ${state === 'running' && !pausa ? 'animate-pulse' : ''}`} />{pausa ? 'En pausa' : !sim && escenario?.dia && dia?.estadoMotor && dia.estadoMotor !== 'EJECUTANDO' ? `Motor: ${dia.estadoMotor}` : stateLabels[state]}</span></p></header>
+  const headerDate = real ?? (!sim && escenario ? (escenario.dia ? escenario.fecha : `Hora simulada ${horaSimulada(escenario.relojH)}`) : null) ?? (idUrl != null && !sim ? 'Esperando datos del escenario' : scenario === 'day' ? 'Esperando datos de la operación' : day)
+  return <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-2"><div className="flex items-center gap-4"><div className="flex size-9 items-center justify-center bg-blue-700 text-white"><Navigation className="size-5" /></div><div><p className="text-lg font-bold">PaqRap</p><p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Centro de control</p></div><div className="hidden h-8 w-px bg-slate-200 md:block" /><div className="hidden md:block"><p className="text-sm font-bold">{headerScenario}</p><p className="text-xs text-slate-500">{headerDate}</p>{collapseView && !sim && <p className="text-xs font-semibold text-slate-500">Duración total 00:37:26</p>}{incidentView && <p className="text-xs font-semibold text-slate-500">Tiempo transcurrido 00:32:10</p>}{fiveDayRunning && !real && <p className="text-xs font-semibold text-slate-500">Tiempo transcurrido {replanned ? '00:34:50' : '00:18:42'}</p>}{real && sim && <p className="text-xs font-semibold text-slate-700">Tiempo real transcurrido {duracion(segReal)}</p>}{real && sim && <p className="text-xs font-semibold text-slate-500">{colapsoReal ? `Sin fecha de fin · ${sim.simulacion.pedidosIncorporados} pedidos ingresados` : `Avance ${Math.round(sim.progreso * 100)}% · ${sim.simulacion.pedidosIncorporados} de ${sim.simulacion.pedidosProgramados} pedidos ingresados`}</p>}</div></div><p className="flex items-center gap-2 text-[11px] text-slate-500"><span className="font-semibold uppercase tracking-wider">Estado</span><span role="status" className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-bold ${estadoUrl && estadoUrl !== 'En ejecución' ? 'bg-amber-100 text-amber-800' : pausa ? 'bg-amber-100 text-amber-800' : state === 'incident' || state === 'collapse' ? 'bg-red-100 text-red-700' : state === 'disconnected' ? 'bg-amber-100 text-amber-800' : state === 'complete' ? 'bg-slate-100 text-slate-600' : 'bg-emerald-100 text-emerald-800'}`}><span className={`size-1.5 rounded-full bg-current ${state === 'running' && !pausa ? 'animate-pulse' : ''}`} />{estadoUrl ?? (pausa ? 'En pausa' : !sim && escenario?.dia && dia?.estadoMotor && dia.estadoMotor !== 'EJECUTANDO' ? `Motor: ${dia.estadoMotor}` : stateLabels[state])}</span></p></header>
 }
 
 // Un solo estilo de pestaña para toda la aplicación: las principales (Nav) y las de escenario del operador
@@ -204,7 +209,7 @@ function FichaPedido({ p, hora, onCerrar, onUnidad }: { p: PedidoRastreo; hora: 
 // Incidencias (averías y bloqueos) en un solo lugar, el mismo en la operación día a día y en las simulaciones.
 // Con un escenario del back-end se registran en él al reloj actual y el planificador replanifica; sin back-end,
 // la avería recorre la escena de demostración del prototipo.
-function Incidencias({ mapa, escenarioId, hora, instanteDemo, onDemo, onCambio, onCerrar }: { mapa: MapaDatos | null; escenarioId: number | null; hora: (h: number) => string; instanteDemo: string; onDemo: () => void; onCambio: () => void; onCerrar: () => void }) {
+function Incidencias({ mapa, mapaActual, escenarioId, hora, instanteDemo, onDemo, onCambio, onCerrar }: { mapaActual: boolean; mapa: MapaDatos | null; escenarioId: number | null; hora: (h: number) => string; instanteDemo: string; onDemo: () => void; onCambio: () => void; onCerrar: () => void }) {
   const [tab, setTab] = useState<'averia' | 'bloqueo'>('averia')
   const [unidad, setUnidad] = useState('')
   const [tipo, setTipo] = useState('')
@@ -212,12 +217,11 @@ function Incidencias({ mapa, escenarioId, hora, instanteDemo, onDemo, onCambio, 
   const [bloqueo, setBloqueo] = useState({ x1: '', y1: '', x2: '', y2: '', horas: '2', motivo: '' })
   const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null)
   const [busy, setBusy] = useState(false)
-  const real = escenarioId != null && mapa != null
+  const real = escenarioId != null && mapa != null && mapaActual
   const vigentes = mapa?.incidencias ?? []
   const codigoDe = (id: number | null) => mapa?.flota.find(v => v.id === id)?.codigo ?? `V-${id}`
   // Primero las unidades en ruta, que son las que suelen averiarse en plena operación
-  const enMantenimiento = new Set(vigentes.filter(i => i.tipo === 'MANTENIMIENTO').map(i => i.vehiculoId))
-  const unidades = real ? mapa.flota.filter(v => !v.averiada && !enMantenimiento.has(v.id)).sort((a, b) => Number(b.enRuta) - Number(a.enRuta) || a.codigo.localeCompare(b.codigo)) : []
+  const unidades = unidadesParaAveria(mapa, real)
   const TIPOS = ['1', '2', '3']
   const ejecutar = async (accion: () => Promise<unknown>, ok: string) => {
     setBusy(true); setMsg(null)
@@ -419,7 +423,7 @@ function CollapseResults({ variant = 'collapse', onLocate, sim, segReal = 0, hor
   </section>
 }
 
-function Operator({ scenario, setScenario, state, setState, replanned, setReplanned, sim, setSim, mapa, escenarioId, onCambio, onUmbrales, hora, segReal, unidadSeleccionada, onUnidad, buscado, setBuscado, warehouse, setWarehouse, historialCompleto }: { mapa: MapaDatos | null; escenarioId: number | null; onCambio: () => void; onUmbrales: (u: { pedido: Umbrales; stock: Umbrales }) => void; hora: (h: number) => string; segReal: number; scenario: Scenario; setScenario: (s: Scenario) => void; state: ExecState; setState: (s: ExecState) => void; replanned: boolean; setReplanned: (r: boolean) => void; sim: VistaSimulacion | null; setSim: (s: VistaSimulacion | null) => void; unidadSeleccionada: number | null; onUnidad: (id: number) => void; buscado: string | null; setBuscado: (codigo: string | null) => void; warehouse: string | null; setWarehouse: (nombre: string | null) => void; historialCompleto: boolean }) {
+function Operator({ scenario, setScenario, state, setState, replanned, setReplanned, sim, setSim, mapa, escenarioId, onCambio, onUmbrales, hora, segReal, unidadSeleccionada, onUnidad, buscado, setBuscado, warehouse, setWarehouse, historialCompleto, recuperarDia, generaciones, invalidarSim, mapaActual }: { mapaActual: boolean; generaciones: ReturnType<typeof crearGeneraciones>; invalidarSim: () => void; recuperarDia: () => void; mapa: MapaDatos | null; escenarioId: number | null; onCambio: () => void; onUmbrales: (u: { pedido: Umbrales; stock: Umbrales }) => void; hora: (h: number) => string; segReal: number; scenario: Scenario; setScenario: (s: Scenario) => void; state: ExecState; setState: (s: ExecState) => void; replanned: boolean; setReplanned: (r: boolean) => void; sim: VistaSimulacion | null; setSim: (s: VistaSimulacion | null) => void; unidadSeleccionada: number | null; onUnidad: (id: number) => void; buscado: string | null; setBuscado: (codigo: string | null) => void; warehouse: string | null; setWarehouse: (nombre: string | null) => void; historialCompleto: boolean }) {
   const u = useContext(UmbralesCtx)
   const [performance, setPerformance] = useState(false)
   const [params, setParams] = useState(false)
@@ -440,20 +444,29 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
   const faultTime = onDay ? (state === 'incident' || replanned ? '08/09/2026 · 10:20:15' : '08/09/2026 · 08:35:20') : scenario === 'five' ? (state === 'incident' || replanned ? '11/09/2026 · 10:20:15' : '10/09/2026 · 14:35:20') : '10/09/2026 · 09:12:40'
   const [simMsg, setSimMsg] = useState('')
   const [simBusy, setSimBusy] = useState(false)
-  // Volver a la operación detiene en el servidor la simulación que siga viva
-  const backToOperation = async () => {
-    if (sim && simViva(sim)) { try { await detenerSimulacion(sim.simulacion.escenarioId) } catch (e) { setSimMsg(mensajeError(e)); return } }
-    setSim(null); setSimMsg(''); setReplanned(false); setHighlightOrderId(null); setBuscado(null); setScenario('day'); setState('running')
+  const ocupada = useRef(false)
+  const backToOperation = () => regresarDeSimulacion(sim, simViva, s => s.simulacion.escenarioId, ocupada, generaciones, {
+    invalidar: invalidarSim,
+    detener: detenerSimulacion,
+    volver: () => { recuperarDia(); setSim(null); setSimMsg(''); setReplanned(false); setHighlightOrderId(null); setBuscado(null); setScenario('day'); setState('running') },
+    error: e => setSimMsg(mensajeError(e)),
+    ocupado: ocupado => { setSimBusy(ocupado); if (ocupado) setSimMsg('') },
+  })
+  const cambiarEscenario = (s: Scenario) => { invalidarSim(); setReplanned(false); setHighlightOrderId(null); setScenario(s); setState(s === 'day' ? 'running' : 'idle') }
+  const startSim = async (tipo: SimType, start: string) => {
+    invalidarSim(); const version = generaciones.actual()
+    await respuestaVigente(tipo === 'five' ? iniciarCincoDias(start) : iniciarColapso(start), generaciones, version, v => { setSim(v); setReplanned(false); setState('running') })
   }
-  const cambiarEscenario = (s: Scenario) => { setReplanned(false); setHighlightOrderId(null); setScenario(s); setState(s === 'day' ? 'running' : 'idle') }
-  const startSim = async (tipo: SimType, start: string) => { const v = await (tipo === 'five' ? iniciarCincoDias(start) : iniciarColapso(start)); setSim(v); setReplanned(false); setState('running') }
   // Al colapsar se resalta el pedido causante en el mapa
   const causante = sim?.colapso?.pedido?.codigo
   useEffect(() => { if (causante) setBuscado(causante) }, [causante])
   const controlSim = async (accion: (id: number) => Promise<VistaSimulacion>) => {
-    if (!sim) return
-    setSimBusy(true); setSimMsg('')
-    try { setSim(await accion(sim.simulacion.escenarioId)) } catch (e) { setSimMsg(mensajeError(e)) } finally { setSimBusy(false) }
+    if (!sim || ocupada.current) return
+    ocupada.current = true; setSimBusy(true); setSimMsg(''); invalidarSim()
+    const version = generaciones.actual()
+    try { await respuestaVigente(accion(sim.simulacion.escenarioId), generaciones, version, v => { invalidarSim(); setSim(v) }) }
+    catch (e) { if (generaciones.vigente(version)) { invalidarSim(); setSimMsg(mensajeError(e)) } }
+    finally { ocupada.current = false; setSimBusy(false) }
   }
   const openWarehouse = (w: string) => { setWarehouse(w); setPanel(true); setTimeout(() => document.getElementById('panel-almacen')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50) }
   const applyParams = () => {
@@ -518,7 +531,7 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
           <div className="mt-3 flex gap-2 text-xs">
             {sim && sim.simulacion.estado === 'EJECUTANDO' && <button disabled={simBusy} onClick={() => controlSim(pausarSimulacion)} className="border border-slate-300 bg-white px-3 py-1.5 font-bold text-slate-700">Pausar</button>}
             {sim && simViva(sim) && sim.simulacion.estado !== 'EJECUTANDO' && <button disabled={simBusy} onClick={() => controlSim(reanudarSimulacion)} className="border border-blue-300 bg-white px-3 py-1.5 font-bold text-blue-700">Reanudar</button>}
-            <button onClick={backToOperation} className="flex-1 border border-red-200 bg-white px-3 py-1.5 font-bold text-red-700">Detener y volver al día a día</button>
+            <button disabled={simBusy} onClick={backToOperation} className="flex-1 border border-red-200 bg-white px-3 py-1.5 font-bold text-red-700">Detener y volver al día a día</button>
           </div>
         </div>}
         {simFinished && <>
@@ -559,11 +572,11 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
       </div>
     </aside> : <button onClick={() => setPanel(true)} className="absolute left-3 top-3 z-10 flex items-center gap-2 border border-slate-200 bg-white/95 px-3 py-2 text-xs font-bold shadow"><PanelLeftOpen className="size-4" />Panel de control</button>}
 
-    {breakdown && <Incidencias mapa={mapa} escenarioId={escenarioId} hora={hora} instanteDemo={faultTime} onCambio={onCambio} onCerrar={() => setBreakdown(false)} onDemo={() => { setReplanned(false); if (onDay) setScenario('day'); setState('incident') }} />}
+    {breakdown && <Incidencias mapaActual={mapaActual} mapa={mapa} escenarioId={escenarioId} hora={hora} instanteDemo={faultTime} onCambio={onCambio} onCerrar={() => setBreakdown(false)} onDemo={() => { setReplanned(false); if (onDay) setScenario('day'); setState('incident') }} />}
   </div>
 }
 
-function Viewer({ state, setState, scenario, replanned, sim, mapa, hora, segReal, esDia = false, unidadSeleccionada, onUnidad, buscado, setBuscado, warehouse, setWarehouse }: { esDia?: boolean; state: ExecState; setState: (s: ExecState) => void; scenario: Scenario; replanned: boolean; sim: VistaSimulacion | null; mapa: MapaDatos | null; hora: (h: number) => string; segReal: number; unidadSeleccionada: number | null; onUnidad: (id: number) => void; buscado: string | null; setBuscado: (codigo: string | null) => void; warehouse: string | null; setWarehouse: (nombre: string | null) => void }) {
+function Viewer({ state, setState, scenario, replanned, sim, mapa, hora, segReal, estadoUrl, esDia = false, unidadSeleccionada, onUnidad, buscado, setBuscado, warehouse, setWarehouse }: { estadoUrl?: string; esDia?: boolean; state: ExecState; setState: (s: ExecState) => void; scenario: Scenario; replanned: boolean; sim: VistaSimulacion | null; mapa: MapaDatos | null; hora: (h: number) => string; segReal: number; unidadSeleccionada: number | null; onUnidad: (id: number) => void; buscado: string | null; setBuscado: (codigo: string | null) => void; warehouse: string | null; setWarehouse: (nombre: string | null) => void }) {
   const [kpisAbiertos, setKpisAbiertos] = useState(false)
   const [estadoAbierto, setEstadoAbierto] = useState(true)
   useEffect(() => { if (window.innerWidth < 768) setEstadoAbierto(false) }, [])
@@ -574,7 +587,7 @@ function Viewer({ state, setState, scenario, replanned, sim, mapa, hora, segReal
   const viewingDay = scenario === 'day' || state === 'idle'
   const shown: ExecState = state
   const final = shown === 'complete' || shown === 'collapse'
-  const title = disconnected ? 'Solo consulta · desconectado' : shown === 'collapse' ? 'Colapso logístico' : shown === 'complete' ? 'Periodo completado' : shown === 'incident' ? 'Incidencia activa · replanificación en proceso' : 'Estado actual de la operación'
+  const title = estadoUrl ?? (disconnected ? 'Solo consulta · desconectado' : shown === 'collapse' ? 'Colapso logístico' : shown === 'complete' ? 'Periodo completado' : shown === 'incident' ? 'Incidencia activa · replanificación en proceso' : 'Estado actual de la operación')
   const c = sim?.pedidos
   // Con una simulación real, los indicadores salen del back-end; sin ella, de la escena de demostración
   const colapsoReal = sim?.simulacion.tipo === 'COLAPSO'
@@ -593,10 +606,10 @@ function Viewer({ state, setState, scenario, replanned, sim, mapa, hora, segReal
     {/* Estado de la ejecución en curso, sobre el mapa */}
     {estadoAbierto ? <section className="absolute left-3 top-3 z-10 max-h-[65%] w-[380px] max-w-[calc(100%-1.5rem)] overflow-y-auto border border-slate-200 bg-white/95 p-4 shadow-lg">
       <button onClick={() => setEstadoAbierto(false)} className="float-right border px-2 py-1 text-xs font-bold" aria-label="Cerrar estado de operación">Cerrar</button>
-      {disconnected && <div className="mb-3 flex items-center justify-between gap-2 border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"><b>Desconectada · último estado conocido</b><button onClick={() => setState('running')} className="border border-amber-300 bg-white px-3 py-1.5 font-bold">Reconectar</button></div>}
+      {disconnected && !estadoUrl && <div className="mb-3 flex items-center justify-between gap-2 border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"><b>Desconectada · último estado conocido</b><button onClick={() => setState('running')} className="border border-amber-300 bg-white px-3 py-1.5 font-bold">Reconectar</button></div>}
       <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Visualizador · Solo consulta</p>
       <h2 className="mt-0.5 text-base font-bold">{title}</h2>
-      <p className="mt-1 hidden text-xs text-slate-500 sm:block">Operación consultada: {!sim && mapa ? (esDia ? scenarioLabels.day : 'escenario del back-end') : sim ? `${colapsoReal ? scenarioLabels.collapse : scenarioLabels.five} · ${sim.simulacion.estado.toLowerCase()}` : scenarioLabels[viewingDay ? 'day' : scenario]}. <span className="font-bold text-slate-600">Solo lectura de lo que está en ejecución (día a día o simulación activa); sin acceso a históricas ni acciones de edición.</span></p>
+      <p className="mt-1 hidden text-xs text-slate-500 sm:block">Operación consultada: {!sim && mapa ? (esDia ? scenarioLabels.day : 'escenario del back-end') : sim ? `${colapsoReal ? scenarioLabels.collapse : scenarioLabels.five} · ${sim.simulacion.estado.toLowerCase()}` : scenarioLabels[viewingDay ? 'day' : scenario]}. <span className="font-bold text-slate-600">{estadoUrl ? 'Consulta del escenario seleccionado.' : 'Solo lectura de lo que está en ejecución; sin acciones de edición.'}</span></p>
       {mapa && mapa.incidencias.length > 0 && <div className="mt-3 border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
         <b>Incidencias vigentes ({mapa.incidencias.length})</b>
         <ul className="mt-1 flex flex-col gap-0.5">{mapa.incidencias.map(i => <li key={i.id}>{i.tipo === 'AVERIA' || i.tipo === 'MANTENIMIENTO' ? <><Wrench className="mr-1 inline size-3.5" />{i.tipo === 'AVERIA' ? 'Avería' : 'Mantenimiento'} · {mapa.flota.find(v => v.id === i.vehiculoId)?.codigo ?? `V-${i.vehiculoId}`}</> : <><AlertTriangle className="mr-1 inline size-3.5" />Bloqueo · {i.tramos.length} km</>} · desde {hora(i.instanteH)}{i.finH != null ? ` hasta ${hora(i.finH)}` : ''}</li>)}</ul>
@@ -621,37 +634,43 @@ export default function Home() {
   const [state, setState] = useState<ExecState>('idle')
   const [replanned, setReplanned] = useState(false)
   const [sim, setSim] = useState<VistaSimulacion | null>(null)
+  const generaciones = useRef(crearGeneraciones()).current
+  const [revisionSim, setRevisionSim] = useState(0)
+  const invalidarSim = () => { generaciones.invalidar(); setRevisionSim(n => n + 1) }
   const simId = sim?.simulacion.escenarioId
   const simAlive = simViva(sim)
   // ?escenario=N abre un escenario concreto (útil para revisar uno sin simulación o desde otro equipo)
   const [escenarioUrl, setEscenarioUrl] = useState<number | null>(null)
+  const [vistaUrl, setVistaUrl] = useState<{ id: number; vista: VistaSimulacion | null } | null>(null)
+  useEffect(() => {
+    if (escenarioUrl == null || simId != null) return
+    setVistaUrl({ id: escenarioUrl, vista: null })
+    return consultarEstadoSeleccionado(escenarioUrl, consultarSimulacion, vista => setVistaUrl({ id: escenarioUrl, vista }))
+  }, [escenarioUrl, simId])
   // Operación día a día: el back-end la mantiene siempre activa en tiempo real
   const [dia, setDia] = useState<OperacionActual | null>(null)
-  const idDia = useRef<number | null>(null)
   const [errorDia, setErrorDia] = useState('')
-  const [reintentoDia, setReintentoDia] = useState(0)
+  const recuperacionDia = useRef<ReturnType<typeof crearRecuperacionDia> | null>(null)
+  const recuperarDia = () => recuperacionDia.current?.recuperar()
+  useEffect(() => {
+    const controlador = crearRecuperacionDia(
+      { actual: operacionActual, consultar: consultarSimulacion, convertir: operacionDesdeVista },
+      { actual: valor => { setDia(valor); setErrorDia('') }, error: e => setErrorDia(mensajeError(e)),
+        recuperando: () => setErrorDia('Recuperando operación') },
+    )
+    recuperacionDia.current = controlador
+    controlador.recuperar()
+    return () => { controlador.cerrar(); recuperacionDia.current = null }
+  }, [])
   useEffect(() => {
     const n = Number(new URLSearchParams(window.location.search).get('escenario'))
     if (Number.isInteger(n) && n > 0) { setEscenarioUrl(n); return }
-    // Un segundo dispositivo se engancha a la simulación que ya está corriendo en el servidor
-    listarSimulaciones()
-      .then(vs => { const v = vs.find(simViva); if (v) { setSim(v); setScenario(v.simulacion.tipo === 'COLAPSO' ? 'collapse' : 'five'); setState('running') } })
+    const version = generaciones.actual()
+    respuestaVigente(listarSimulaciones(), generaciones, version,
+      vs => { const v = vs.find(simulacionDescubrible); if (v) { setSim(v); setScenario(v.simulacion.tipo === 'COLAPSO' ? 'collapse' : 'five'); setState('running') } })
       .catch(() => { /* La recuperación de la operación informa el error. */ })
+    return () => { generaciones.invalidar() }
   }, [])
-  useEffect(() => {
-    let activo = true
-    let timer: ReturnType<typeof setTimeout>
-    const cargar = async () => {
-      try {
-        const actual = idDia.current === null ? await operacionActual() : operacionDesdeVista(await consultarSimulacion(idDia.current))
-        if (activo) { idDia.current = actual.escenarioId; setDia(actual); setErrorDia('') }
-      }
-      catch (e) { if (activo) setErrorDia(mensajeError(e)) }
-      if (activo) timer = setTimeout(cargar, 2000)
-    }
-    void cargar()
-    return () => { activo = false; clearTimeout(timer) }
-  }, [reintentoDia])
   // Lo que se ve: la simulación (viva o su resultado), el escenario de la URL o, si no, la operación día a día
   const escenarioMapa = simId ?? escenarioUrl ?? dia?.escenarioId ?? null
   const [seleccionUnidad, setSeleccionUnidad] = useState<{ escenarioId: number; id: number } | null>(null)
@@ -663,9 +682,12 @@ export default function Home() {
   const seleccionarAlmacen = (nombre: string | null) => { if (nombre !== null) setSeleccionUnidad(null); setSeleccionAlmacen(nombre === null || escenarioMapa === null ? null : { escenarioId: escenarioMapa, nombre }) }
   useEffect(() => { setSeleccionUnidad(null); setSeleccionAlmacen(null); setBuscado(null) }, [escenarioMapa])
   const esDia = escenarioMapa != null && escenarioMapa === dia?.escenarioId
+  const consultandoUrl = simId == null && escenarioUrl != null
+  const vistaSeleccionada = consultandoUrl && vistaUrl?.id === escenarioUrl ? vistaUrl.vista : null
+  const estadoUrl = consultandoUrl ? etiquetaEstadoEscenario(vistaSeleccionada?.simulacion.estado ?? null) : undefined
   const mapaVivo = escenarioMapa != null && (simAlive || escenarioUrl != null || esDia)
   const operacion = useOperacion(escenarioMapa)
-  const motorActivo = operacion.conexion === 'actual' && (esDia ? !errorDia && dia?.estadoMotor === 'EJECUTANDO' : sim?.simulacion.estado === 'EJECUTANDO')
+  const motorActivo = operacion.conexion === 'actual' && (consultandoUrl ? vistaSeleccionada?.simulacion.estado === 'EJECUTANDO' : esDia ? !errorDia && dia?.estadoMotor === 'EJECUTANDO' : sim?.simulacion.estado === 'EJECUTANDO')
   const posicionesVisuales = useMovimiento(operacion.mapa, motorActivo)
   // Tras registrar un pedido o una incidencia se vuelve a consultar el mapa sin esperar al siguiente ciclo
   const [cambios, setCambios] = useState(0)
@@ -715,16 +737,14 @@ export default function Home() {
   const mapaError = operacion.error
   const historialActual = historial?.escenarioId === escenarioMapa ? historial.pedidos : null
   const estadoHistorial = historialError?.escenarioId === escenarioMapa ? (historialActual ? 'desactualizado' : 'error') : historialCargando ? 'cargando' : historialActual ? 'actual' : 'cargando'
-  // El servidor conduce la simulación; aquí solo se consulta su progreso cada 2 s
+  // El siguiente sondeo empieza solo después de completar el anterior.
   useEffect(() => {
     if (simId == null || !simAlive) return
-    const t = setInterval(() => {
-      consultarSimulacion(simId)
-        .then(v => { setSim(v); if (v.simulacion.estado === 'FINALIZADA') setState(v.colapso ? 'collapse' : 'complete') })
-        .catch(() => { /* se reintenta en el siguiente ciclo */ })
-    }, 2000)
-    return () => clearInterval(t)
-  }, [simId, simAlive])
+    const version = generaciones.actual()
+    return sondearSerial(() => consultarSimulacion(simId), v => {
+      setSim(v); if (v.simulacion.estado === 'FINALIZADA') setState(v.colapso ? 'collapse' : 'complete')
+    }, () => generaciones.vigente(version))
+  }, [simId, simAlive, revisionSim])
   // Tiempo real de ejecución: avanza con el reloj del navegador mientras la simulación está EJECUTANDO y se
   // congela en pausa. Al engancharse a una simulación ya iniciada parte de lo que estima el reloj del back-end.
   const [segReal, setSegReal] = useState(0)
@@ -758,7 +778,7 @@ export default function Home() {
   // El registrador ingresa pedidos solo para la operación día a día (o el escenario abierto con ?escenario=N)
   const diaRegistro = escenarioUrl ?? dia?.escenarioId ?? null
   const horaRegistro = useMemo(() => dia && diaRegistro === dia.escenarioId ? (h: number) => fechaDesdeBase(dia.fechaBase, h) : hora, [dia, diaRegistro, hora])
-  const effectiveState: ExecState = !sim && scenario === 'day' ? (errorDia ? 'disconnected' : dia?.estadoMotor === 'EJECUTANDO' ? 'running' : 'idle') : state === 'idle' && role === 'visualizador' ? 'running' : state
+  const effectiveState: ExecState = consultandoUrl ? (vistaSeleccionada?.simulacion.estado === 'EJECUTANDO' ? 'running' : vistaSeleccionada ? 'idle' : 'disconnected') : !sim && scenario === 'day' ? (errorDia ? 'disconnected' : dia?.estadoMotor === 'EJECUTANDO' ? 'running' : 'idle') : state === 'idle' && role === 'visualizador' ? 'running' : state
   // Traza de depuración (solo en desarrollo): se ve en la consola del navegador (F12 → Consola).
   useEffect(() => {
     if (process.env.NODE_ENV === 'production') return
@@ -774,16 +794,16 @@ export default function Home() {
   }, [role, scenario, effectiveState, replanned])
   // Operador y visualizador trabajan sobre el mapa a pantalla completa; el registrador es un formulario.
   return <UmbralesCtx.Provider value={umbrales}><main className="flex h-dvh flex-col overflow-hidden bg-white font-sans text-slate-900">
-    <Header scenario={scenario} state={effectiveState} replanned={replanned} sim={sim} segReal={segReal} dia={dia} escenario={mapa && escenarioMapa != null ? { id: escenarioMapa, relojH: mapa.relojH, dia: esDia, fecha: hora(mapa.relojH) } : null} />
-    {!sim && scenario === 'day' && (errorDia || (dia && dia.estadoMotor !== 'EJECUTANDO')) && <div role="status" className="border-b border-amber-200 bg-amber-50 px-5 py-2 text-xs text-amber-900">{errorDia ? <>{`Conexión interrumpida: ${errorDia}${dia ? ' · último estado conocido' : ''}`} <button className="ml-2 border border-amber-400 bg-white px-2 py-1 font-bold" onClick={() => setReintentoDia(n => n + 1)}>Reintentar</button></> : `Motor: ${dia?.estadoMotor}${dia?.ultimoError ? ` · ${dia.ultimoError}` : ''}`}</div>}
-    <Nav role={role} setRole={setRole} />
+    <Header idUrl={consultandoUrl ? escenarioUrl : null} estadoUrl={estadoUrl} scenario={scenario} state={effectiveState} replanned={replanned} sim={sim} segReal={segReal} dia={dia} escenario={mapa && escenarioMapa != null ? { id: escenarioMapa, relojH: mapa.relojH, dia: esDia, fecha: hora(mapa.relojH) } : null} />
+    {!consultandoUrl && !sim && scenario === 'day' && (errorDia || (dia && dia.estadoMotor !== 'EJECUTANDO')) && <div role="status" className="border-b border-amber-200 bg-amber-50 px-5 py-2 text-xs text-amber-900">{errorDia ? <>{`Conexión interrumpida: ${errorDia}${dia ? ` · último estado conocido: ${dia.estadoMotor}${dia.ultimoError ? ` · ${dia.ultimoError}` : ''}` : ''}`} <button className="ml-2 border border-amber-400 bg-white px-2 py-1 font-bold" onClick={recuperarDia}>Reintentar</button></> : `Motor: ${dia?.estadoMotor}${dia?.ultimoError ? ` · ${dia.ultimoError}` : ''}`}</div>}
+    <Nav role={role} setRole={r => { invalidarSim(); setRole(r) }} />
     {role === 'registrador'
-      ? <div className="min-h-0 flex-1 overflow-y-auto bg-[#f3f5f6] p-5 md:p-7"><div className="mx-auto max-w-[1500px]"><Registrar escenarioId={diaRegistro} disponible={!errorDia} rastreo={diaRegistro != null && diaRegistro === escenarioMapa && historialActual ? mapa?.rastreo ?? null : null} hora={horaRegistro} onRegistrado={refrescar} historialDesactualizado={estadoHistorial === 'desactualizado'} /></div></div>
+      ? <div className="min-h-0 flex-1 overflow-y-auto bg-[#f3f5f6] p-5 md:p-7"><div className="mx-auto max-w-[1500px]"><Registrar escenarioId={diaRegistro} disponible={!errorDia && (!consultandoUrl || vistaSeleccionada?.simulacion.estado === 'EJECUTANDO')} rastreo={diaRegistro != null && diaRegistro === escenarioMapa && historialActual ? mapa?.rastreo ?? null : null} hora={horaRegistro} onRegistrado={refrescar} historialDesactualizado={estadoHistorial === 'desactualizado'} /></div></div>
       : <div className="relative min-h-0 flex-1">
           {mapaError && <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 shadow">Mapa sin actualizar: {mapaError} <button onClick={refrescar} className="ml-2 border border-amber-400 bg-white px-2 py-1">Reintentar</button></div>}
           {motorActivo && Object.keys(posicionesVisuales).length > 0 && <div role="status" className="absolute bottom-16 left-1/2 z-20 -translate-x-1/2 bg-white/95 px-2 py-1 text-xs text-slate-700 shadow">Movimiento visual entre lecturas confirmadas</div>}
-          {role === 'operador' && <Operator onUmbrales={setUmbrales} mapa={mapa} escenarioId={mapaVivo ? escenarioMapa : null} onCambio={refrescar} hora={hora} segReal={segReal} scenario={scenario} setScenario={setScenario} state={scenario === 'day' ? effectiveState : state} setState={setState} replanned={replanned} setReplanned={setReplanned} sim={sim} setSim={setSim} unidadSeleccionada={unidadSeleccionada} onUnidad={seleccionarUnidad} buscado={buscado} setBuscado={setBuscado} warehouse={almacenSeleccionado} setWarehouse={seleccionarAlmacen} historialCompleto={historialActual !== null && estadoHistorial === 'actual'} />}
-          {role === 'visualizador' && <Viewer esDia={esDia} sim={sim} mapa={mapa} hora={hora} segReal={segReal} scenario={scenario} state={effectiveState} setState={setState} replanned={replanned} unidadSeleccionada={unidadSeleccionada} onUnidad={seleccionarUnidad} buscado={buscado} setBuscado={setBuscado} warehouse={almacenSeleccionado} setWarehouse={seleccionarAlmacen} />}
+          {role === 'operador' && <Operator mapaActual={operacion.conexion === 'actual'} generaciones={generaciones} invalidarSim={invalidarSim} recuperarDia={recuperarDia} onUmbrales={setUmbrales} mapa={mapa} escenarioId={mapaVivo ? escenarioMapa : null} onCambio={refrescar} hora={hora} segReal={segReal} scenario={scenario} setScenario={setScenario} state={scenario === 'day' ? effectiveState : state} setState={setState} replanned={replanned} setReplanned={setReplanned} sim={sim} setSim={setSim} unidadSeleccionada={unidadSeleccionada} onUnidad={seleccionarUnidad} buscado={buscado} setBuscado={setBuscado} warehouse={almacenSeleccionado} setWarehouse={seleccionarAlmacen} historialCompleto={historialActual !== null && estadoHistorial === 'actual'} />}
+          {role === 'visualizador' && <Viewer estadoUrl={estadoUrl} esDia={esDia} sim={sim} mapa={mapa} hora={hora} segReal={segReal} scenario={scenario} state={effectiveState} setState={setState} replanned={replanned} unidadSeleccionada={unidadSeleccionada} onUnidad={seleccionarUnidad} buscado={buscado} setBuscado={setBuscado} warehouse={almacenSeleccionado} setWarehouse={seleccionarAlmacen} />}
           <PanelFlota key={`flota-${escenarioMapa ?? 'sin-escenario'}`} unidades={operacion.unidades?.unidades ?? null} detalle={operacion.detalle} hora={hora} seleccion={unidadSeleccionada} onSeleccion={seleccionarUnidad} incidencias={operacion.mapa?.incidencias ?? []} onPedido={setBuscado} />
           <PanelEnvios key={`envios-${escenarioMapa ?? 'sin-escenario'}`} mapa={operacion.mapa} unidades={operacion.detalle === 'actual' ? operacion.unidades : null} historial={historialActual} estadoHistorial={estadoHistorial} estadoMapa={operacion.conexion} hora={hora} onPedido={setBuscado} onUnidad={seleccionarUnidad} />
         </div>}

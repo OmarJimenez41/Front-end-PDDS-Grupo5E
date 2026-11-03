@@ -18,3 +18,11 @@ Este documento reúne evidencia técnica disponible para que el equipo la contra
 - Confirmación de Daniel/Omar sobre contratos y datos en el backend compartido y de Brillytd sobre integración y despliegue.
 
 No se han inventado horas ni se ha afirmado cumplimiento de los instrumentos externos. Los registros y capturas definitivos deben vincularse al formato oficial que facilite el equipo.
+
+## Evidencia adicional del 3 de noviembre de 2026
+
+- Recuperación diaria y aislamiento de respuestas tardías con pruebas controladas; regresión local de pausa, reanudación y detención de escenarios 5D 2 y Colapso 3.
+- Mantenimiento real de TB03 en escenario 4, con ficha abierta antes y después; detalle sincronizado tras pausar el escenario de prueba. Consulta histórica corregida para mostrar el estado del escenario seleccionado.
+- Preparación de datos y base locales aislados, verificación de 37 UT y actualización de la matriz, notas y guion. Los resultados y sus límites están en [verificacion-tecnica.md](verificacion-tecnica.md).
+
+No se atribuyen horas, aprobación del equipo ni publicación a estas actividades.

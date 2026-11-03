@@ -10,6 +10,11 @@ require.extensions['.tsx'] = (module, file) => {
   module._compile(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, jsx: ts.JsxEmit.ReactJSX } }).outputText, file)
 }
 const { leerOperacion } = require('../lib/operacion/lectura.ts')
+const { consultarEstadoSeleccionado, etiquetaEstadoEscenario } = require('../lib/operacion/estadoEscenario.ts')
+const { unidadesParaAveria } = require('../lib/operacion/unidadesParaAveria.ts')
+const { crearGeneraciones, regresarDeSimulacion, respuestaVigente, sondearSerial } = require('../lib/operacion/simulacionControl.ts')
+const { simulacionDescubrible } = require('../lib/operacion/descubrimiento.ts')
+const { crearRecuperacionDia } = require('../lib/operacion/recuperacionDia.ts')
 const { iniciarControlador } = require('../lib/operacion/controlador.ts')
 const { puntoCertificado, tramoConfirmado, movimientoPermitido, animarIntervalo } = require('../lib/operacion/movimiento.ts')
 const { ampliarCamara, centrarCamara, limitarCamara } = require('../lib/operacion/camara.ts')
@@ -24,6 +29,115 @@ const unidades = (reloj, escenarioId = 1) => ({ escenarioId, relojH: reloj, unid
 const signal = new AbortController().signal
 
 async function main() {
+  {
+  // Cada generación resuelve /actual; las respuestas anteriores no se publican.
+  const pendientes = [], llamadas = [], publicados = [], errores = []
+  const diferida = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b }); return { promise, resolve, reject } }
+  const apiDia = { actual: () => { llamadas.push('actual'); const d = diferida(); pendientes.push(d); return d.promise }, consultar: id => { llamadas.push(id); const d = diferida(); pendientes.push(d); return d.promise }, convertir: v => v }
+  const controlDia = crearRecuperacionDia(apiDia, { actual: v => publicados.push(v), error: e => errores.push(e.message), recuperando: () => {} }, 1)
+  const tick = () => new Promise(resolve => setTimeout(resolve, 5))
+  controlDia.recuperar(); controlDia.recuperar()
+  pendientes[0].resolve({ escenarioId: 1 }); pendientes[1].resolve({ escenarioId: 2, estadoMotor: 'PAUSADA' })
+  await tick()
+  assert.deepEqual(llamadas, ['actual', 'actual', 2]); assert.deepEqual(publicados.map(v => v.escenarioId), [2])
+  pendientes[2].reject(new Error('sin conexión')); await tick()
+  assert.deepEqual(errores, ['sin conexión']); assert.equal(publicados[0].estadoMotor, 'PAUSADA')
+  controlDia.recuperar(); assert.equal(llamadas.at(-1), 'actual')
+  pendientes.at(-1).resolve({ escenarioId: 3, estadoMotor: 'ERROR', ultimoError: 'diagnóstico' }); await tick()
+  assert.equal(publicados.at(-1).escenarioId, 3); assert.equal(publicados.at(-1).ultimoError, 'diagnóstico')
+  controlDia.cerrar()
+  }
+  const candidata = (tipo, estado = 'EJECUTANDO') => ({ simulacion: { tipo, estado } })
+  assert.equal([candidata('DIA_A_DIA'), candidata(undefined)].find(simulacionDescubrible), undefined)
+  assert.equal([candidata('DIA_A_DIA'), candidata('COLAPSO', 'FINALIZADA'), candidata('CINCO_DIAS', 'PAUSADA')].find(simulacionDescubrible).simulacion.tipo, 'CINCO_DIAS')
+  assert.equal([candidata('COLAPSO')].find(simulacionDescubrible).simulacion.tipo, 'COLAPSO')
+  {
+    const generaciones = crearGeneraciones(), version = generaciones.actual()
+    let resolver, consultas = 0, resultado = []
+    const detener = sondearSerial(() => { consultas++; return new Promise(r => { resolver = r }) }, v => resultado.push(v), () => generaciones.vigente(version), 1)
+    await new Promise(r => setTimeout(r, 8))
+    assert.equal(consultas, 1)
+    await new Promise(r => setTimeout(r, 8))
+    assert.equal(consultas, 1, 'no se acumulan consultas pendientes')
+    generaciones.invalidar(); resolver('respuesta tardía'); await new Promise(r => setTimeout(r, 8))
+    assert.deepEqual(resultado, []); assert.equal(consultas, 1)
+    detener()
+  }
+  {
+    const diferida = () => { let resolver, rechazar; const promesa = new Promise((a, b) => { resolver = a; rechazar = b }); return { promesa, resolver, rechazar } }
+    const gate = crearGeneraciones(), ocupado = { current: false }, llamadas = [], fallo = diferida()
+    let vuelta = 0, errores = []
+    const acciones = { invalidar: () => gate.invalidar(), detener: id => { llamadas.push(id); return fallo.promesa }, volver: () => { llamadas.push('actual'); vuelta++ }, error: e => errores.push(e.message), ocupado: () => {} }
+    const viva = s => s.estado === 'EJECUTANDO' || s.estado === 'PAUSADA', id = s => s.id
+    const primera = regresarDeSimulacion({ id: 91, estado: 'EJECUTANDO' }, viva, id, ocupado, gate, acciones)
+    await regresarDeSimulacion({ id: 91, estado: 'EJECUTANDO' }, viva, id, ocupado, gate, acciones)
+    assert.deepEqual(llamadas, [91], 'doble clic no duplica detención')
+    fallo.rechazar(new Error('falló')); await primera
+    assert.equal(vuelta, 0); assert.deepEqual(errores, ['falló'])
+    const detener = diferida(); acciones.detener = id => { llamadas.push(id); return detener.promesa }
+    const segunda = regresarDeSimulacion({ id: 92, estado: 'PAUSADA' }, viva, id, ocupado, gate, acciones)
+    assert.deepEqual(llamadas, [91, 92]); detener.resolver({}); await segunda
+    assert.deepEqual(llamadas, [91, 92, 'actual'], 'recupera únicamente tras confirmación')
+    for (const tipo of ['CINCO_DIAS', 'COLAPSO']) {
+      const antigua = gate.actual()
+      await regresarDeSimulacion({ id: 93, estado: 'FINALIZADA', tipo }, viva, id, ocupado, gate, acciones)
+      assert.equal(gate.vigente(antigua), false, 'invalidación síncrona antes de limpiar efectos')
+    }
+    assert.deepEqual(llamadas, [91, 92, 'actual', 'actual', 'actual'], 'cerrar resultados no detiene otra vez')
+    const tardia = diferida(); acciones.detener = () => tardia.promesa
+    const tercera = regresarDeSimulacion({ id: 94, estado: 'EJECUTANDO' }, viva, id, ocupado, gate, acciones)
+    gate.invalidar(); tardia.resolver({}); await tercera
+    assert.equal(vuelta, 3, 'una detención obsoleta no cambia la vista')
+  }
+  {
+    const gate = crearGeneraciones(), version = gate.actual(), pendientes = [], eventos = [], ocupado = { current: false }
+    let resolverSondeo
+    const cerrar = sondearSerial(() => new Promise(resolve => { resolverSondeo = resolve }), v => eventos.push(v), () => gate.vigente(version), 1)
+    await new Promise(r => setTimeout(r, 5))
+    const dia = crearRecuperacionDia({ actual: () => { eventos.push('/actual'); return new Promise(resolve => pendientes.push(resolve)) }, consultar: () => { throw Error('no debe consultar el id previo') }, convertir: x => x }, { actual: x => eventos.push(x.escenarioId), error: e => eventos.push(e.message), recuperando: () => {} }, 10000)
+    dia.recuperar(); pendientes.shift()({ escenarioId: 1 }); await Promise.resolve()
+    const volver = regresarDeSimulacion({ id: 8, estado: 'FINALIZADA' }, x => x.estado === 'EJECUTANDO', x => x.id, ocupado, gate, { invalidar: () => gate.invalidar(), detener: () => { throw Error('no debe detener') }, volver: () => dia.recuperar(), error: e => { throw e }, ocupado: () => {} })
+    resolverSondeo('respuesta tardía'); await volver; await Promise.resolve()
+    pendientes.shift()({ escenarioId: 2 }); await Promise.resolve()
+    assert.deepEqual(eventos, ['/actual', 1, '/actual', 2])
+    cerrar(); dia.cerrar()
+  }
+  {
+    const errores = [], vistos = []
+    const controlador = crearRecuperacionDia({ actual: async () => { throw Error('fallo inicial') }, consultar: async () => { throw Error('consulta inesperada') }, convertir: v => v }, { actual: v => vistos.push(v), error: e => errores.push(e.message), recuperando: () => {} }, 10000)
+    controlador.recuperar(); await Promise.resolve(); await Promise.resolve()
+    assert.deepEqual(vistos, []); assert.deepEqual(errores, ['fallo inicial'])
+    controlador.cerrar()
+  }
+  {
+    // Descubrimiento, inicio y comandos comparten el mismo rechazo por generación.
+    for (const origen of ['descubrimiento', 'inicio', 'comando']) {
+      const g = crearGeneraciones(), actual = g.actual(), efectos = []
+      let resolver
+      const respuesta = respuestaVigente(new Promise(r => { resolver = r }), g, actual, v => efectos.push(v))
+      g.invalidar(); resolver({ origen, escenarioId: 99, relojH: 24 }); await respuesta
+      assert.deepEqual(efectos, [], origen + ' obsoleto no cambia escenario ni reloj')
+    }
+  }
+  {
+    assert.equal(etiquetaEstadoEscenario('EJECUTANDO'), 'En ejecución')
+    assert.equal(etiquetaEstadoEscenario('PAUSADA'), 'En pausa')
+    assert.equal(etiquetaEstadoEscenario('DETENIDA'), 'Detenida')
+    assert.equal(etiquetaEstadoEscenario('FINALIZADA'), 'Finalizada')
+    assert.equal(etiquetaEstadoEscenario(null), 'Estado no disponible')
+    const vistos = [], pendientes = []
+    const api = id => new Promise((resolve, reject) => pendientes.push({ id, resolve, reject }))
+    const cerrarViejo = consultarEstadoSeleccionado(4, api, v => vistos.push(v?.simulacion.escenarioId ?? null), 10000)
+    cerrarViejo()
+    const cerrarNuevo = consultarEstadoSeleccionado(5, api, v => vistos.push(v?.simulacion.escenarioId ?? null), 10000)
+    pendientes[0].resolve({ simulacion: { escenarioId: 4, estado: 'EJECUTANDO' } })
+    pendientes[1].resolve({ simulacion: { escenarioId: 5, estado: 'DETENIDA' } })
+    await Promise.resolve(); assert.deepEqual(vistos, [5]); cerrarNuevo()
+    const cerrarError = consultarEstadoSeleccionado(6, api, v => vistos.push(v?.simulacion.escenarioId ?? null), 10000)
+    pendientes[2].reject(Error('sin conexión')); await Promise.resolve(); assert.deepEqual(vistos, [5, null]); cerrarError()
+    const cerrarIncorrecto = consultarEstadoSeleccionado(7, api, v => vistos.push(v?.simulacion.escenarioId ?? null), 10000)
+    pendientes[3].resolve({ simulacion: { escenarioId: 8, estado: 'EJECUTANDO' } }); await Promise.resolve(); assert.deepEqual(vistos, [5, null, null]); cerrarIncorrecto()
+  }
   const realFetch = global.fetch
   const flota = [{ codigo: 'C', ocupacionPct: 100, salidaH: null }, { codigo: 'B', ocupacionPct: 8, salidaH: 26 }, { codigo: 'A', ocupacionPct: 50, salidaH: 23 }]
   assert.deepEqual(ordenarUnidades(flota, 'ocupacionPct', true).map(u => u.ocupacionPct), [8, 50, 100])
@@ -52,6 +166,18 @@ async function main() {
   const mantenimientoHtml = renderToStaticMarkup(React.createElement(PanelFlota, { ...propsMantenimiento, unidades: [{ ...ejemploUnidad, estado: 'EN_MANTENIMIENTO' }], incidencias: [{ id: 8, tipo: 'MANTENIMIENTO', vehiculoId: 7, instanteH: 2, finH: 4 }] }))
   assert.ok(mantenimientoHtml.includes('Mantenimiento') && mantenimientoHtml.includes('H2') && mantenimientoHtml.includes('H4'))
   assert.ok(!mantenimientoHtml.includes('Unidad reparada'))
+  // La ficha permanece seleccionada; solo las lecturas del servidor cambian las opciones.
+  const ut = { id: 7, codigo: 'TM01', tipo: 'MOTO', disponible: true, averiada: false, enRuta: false }
+  const incidenciaMant = { id: 8, tipo: 'MANTENIMIENTO', vehiculoId: 7, instanteH: 2, finH: 4 }
+  const antes = { flota: [ut], incidencias: [] }
+  const durante = { flota: [{ ...ut, disponible: false }], incidencias: [incidenciaMant] }
+  assert.equal(unidadesParaAveria(antes, true).length, 1)
+  assert.equal(unidadesParaAveria(durante, true).length, 0)
+  assert.equal(unidadesParaAveria(durante, false).length, 0)
+  assert.equal(unidadesParaAveria(antes, false).length, 0)
+  assert.equal(unidadesParaAveria(antes, true).length, 1)
+  assert.equal(unidadesParaAveria({ flota: [{ ...ut, averiada: true }], incidencias: [] }, true).length, 0)
+  assert.equal(unidadesParaAveria({ flota: [{ ...ut, disponible: false }], incidencias: [] }, true).length, 0)
   const reincorporada = renderToStaticMarkup(React.createElement(PanelFlota, { ...propsMantenimiento, unidades: [{ ...ejemploUnidad, estado: 'EN_BASE' }], incidencias: [] }))
   assert.ok(reincorporada.includes('EN BASE'))
   assert.ok(!reincorporada.includes('Mantenimiento · desde'))
@@ -109,6 +235,22 @@ async function main() {
   assert.equal((90 - pantallaPequena.x) / pantallaPequena.escala, 90)
   assert.equal((320 - pantallaPequena.y) / pantallaPequena.escala, 320)
   const baseEstado = { escenarioId: 1, versionEstado: 1, relojH: 0, fisico: { relojH: 0, almacenes: [], vehiculos: [{ id: 1, codigo: 'TA01', tipo: 'AUTO', almacenBaseId: 1, capacidad: 10, carga: 2, x: 0, y: 0, disponible: true }, { id: 2, codigo: 'TM01', tipo: 'MOTO', almacenBaseId: 1, capacidad: 10, carga: 2, x: 0, y: 0, disponible: true }] } }
+  {
+    const ventana = { id: 22, tipo: 'MANTENIMIENTO', vehiculoId: 2, instanteH: 2, finH: 4, activa: true, tramos: [] }
+    const entrada = (h, disponible, incidencias) => datosMapa({ ...baseEstado, relojH: h, fisico: { ...baseEstado.fisico, relojH: h, vehiculos: baseEstado.fisico.vehiculos.map(v => v.id === 2 ? { ...v, disponible } : v) } }, null, [], incidencias)
+    const antes = entrada(1, true, []), durante = entrada(3, false, [ventana]), despues = entrada(5, true, [])
+    assert.equal(unidadesParaAveria(antes, true).some(u => u.id === 2), true)
+    assert.equal(unidadesParaAveria(durante, true).some(u => u.id === 2), false)
+    assert.equal(durante.incidencias[0].finH, 4)
+    assert.equal(unidadesParaAveria(despues, true).some(u => u.id === 2), true)
+    const conAveria = entrada(5, false, [{ ...ventana, tipo: 'AVERIA' }])
+    assert.equal(unidadesParaAveria(conAveria, true).some(u => u.id === 2), false)
+    const sinConfirmacion = entrada(50, false, [ventana])
+    assert.equal(unidadesParaAveria(sinConfirmacion, true).some(u => u.id === 2), false, 'el reloj no finaliza la incidencia')
+    assert.equal(unidadesParaAveria(despues, false).length, 0, 'un mapa desactualizado no habilita unidades')
+    const fichaVieja = renderToStaticMarkup(React.createElement(PanelFlota, { ...propsMantenimiento, detalle: 'desactualizado', unidades: [{ ...ejemploUnidad, estado: 'EN_MANTENIMIENTO' }], incidencias: [ventana] }))
+    assert.ok(fichaVieja.includes('desactualizado') && fichaVieja.includes('EN MANTENIMIENTO'))
+  }
   const pedido = { id: 1, codigo: 'P1', posX: 1, posY: 1, cantidad: 4, tipo: 'REGULAR', horaIngresoH: 0, fechaLimiteH: 36, estado: 'PENDIENTE', entregadoEnH: null }
   const ruta = (id, vehiculoId) => ({ id, vehiculoId, tipoVehiculo: vehiculoId === 1 ? 'AUTO' : 'MOTO', horaInicioH: 0, horaFinH: 4, trazado: [{ secuencia: 0, x: 0, y: 0, instanteH: 0 }, { secuencia: 1, x: 1, y: 0, instanteH: 1 }], paradas: [{ pedidoId: 1, codigoPedido: 'P1', secuencia: 0, etaH: 1, entregado: false, cantidad: 2 }] })
   const dosRutas = datosMapa(baseEstado, { id: 1, rutas: [ruta(10, 1), ruta(20, 2)] }, [pedido]).rastreo[0]
