@@ -155,7 +155,7 @@ async function main() {
   for (const estado of ['EN_BASE', 'PROGRAMADA', 'EN_RUTA', 'EN_SERVICIO', 'AVERIADA', 'EN_MANTENIMIENTO']) {
     const unidad = { ...ejemploUnidad, estado, pedidos: estado === 'PROGRAMADA' ? [{ id: 4, codigo: 'PED-4', cantidad: 2, etaH: 3, enServicio: false }] : [] }
     const html = renderToStaticMarkup(React.createElement(PanelFlota, { unidades: [unidad], detalle: 'actual', hora: h => `H${h}`, seleccion: 7, onSeleccion: () => {}, incidencias: [], onPedido: () => {} }))
-    assert.ok(html.includes(estado.replaceAll('_', ' ')))
+    assert.ok(html.includes(require('../lib/operacion/mejorasV9.ts').estadoEnEspanol(estado)))
     assert.ok(html.includes('Sin asignación'))
     if (estado === 'PROGRAMADA') assert.ok(html.includes('Pedidos programados') && html.includes('PED-4'))
   }
@@ -179,7 +179,7 @@ async function main() {
   assert.equal(unidadesParaAveria({ flota: [{ ...ut, averiada: true }], incidencias: [] }, true).length, 0)
   assert.equal(unidadesParaAveria({ flota: [{ ...ut, disponible: false }], incidencias: [] }, true).length, 0)
   const reincorporada = renderToStaticMarkup(React.createElement(PanelFlota, { ...propsMantenimiento, unidades: [{ ...ejemploUnidad, estado: 'EN_BASE' }], incidencias: [] }))
-  assert.ok(reincorporada.includes('EN BASE'))
+  assert.ok(reincorporada.includes('En base'))
   assert.ok(!reincorporada.includes('Mantenimiento · desde'))
   const aristas = [{ x1: 0, y1: 0, x2: 1, y2: 0, salidaH: 0, llegadaH: 1 }, { x1: 1, y1: 0, x2: 1, y2: 1, salidaH: 2, llegadaH: 3 }, { x1: 1, y1: 1, x2: 1, y2: 1, salidaH: 3, llegadaH: 4 }]
   assert.equal(direccionEn(aristas, 0.5), 0)
@@ -201,8 +201,9 @@ async function main() {
   assert.equal(movimientoPermitido(anteriorMovimiento, actualMovimiento, true, false), true)
   assert.equal(movimientoPermitido(anteriorMovimiento, actualMovimiento, false, false), false)
   assert.equal(movimientoPermitido(anteriorMovimiento, actualMovimiento, true, true), false)
-  assert.equal(movimientoPermitido(anteriorMovimiento, { ...actualMovimiento, aplicable: false }, true, false), false)
-  assert.equal(movimientoPermitido(anteriorMovimiento, { ...actualMovimiento, plan: { id: 2 } }, true, false), false)
+  // La admisión temporal no autoriza un camino: trayectoriaConfirmada comprueba las posiciones físicas.
+  assert.equal(movimientoPermitido(anteriorMovimiento, { ...actualMovimiento, aplicable: false }, true, false), true)
+  assert.equal(movimientoPermitido(anteriorMovimiento, { ...actualMovimiento, plan: { id: 2 } }, true, false), true)
   assert.equal(movimientoPermitido(anteriorMovimiento, { ...actualMovimiento, escenarioId: 2 }, true, false), false)
   const vistaError = { simulacion: { escenarioId: 1, fechaBase: '2026-10-27', relojH: 3, estado: 'ERROR', ultimoError: 'fallo de prueba' }, fechaSimulada: '2026-10-27T03:00:00', pedidos: {} }
   assert.equal(operacionDesdeVista(vistaError).estadoMotor, 'ERROR')
@@ -235,6 +236,15 @@ async function main() {
   assert.equal((90 - pantallaPequena.x) / pantallaPequena.escala, 90)
   assert.equal((320 - pantallaPequena.y) / pantallaPequena.escala, 320)
   const baseEstado = { escenarioId: 1, versionEstado: 1, relojH: 0, fisico: { relojH: 0, almacenes: [], vehiculos: [{ id: 1, codigo: 'TA01', tipo: 'AUTO', almacenBaseId: 1, capacidad: 10, carga: 2, x: 0, y: 0, disponible: true }, { id: 2, codigo: 'TM01', tipo: 'MOTO', almacenBaseId: 1, capacidad: 10, carga: 2, x: 0, y: 0, disponible: true }] } }
+  // La ocupación existe antes de recibir /unidades: no debe volverse gris por un sondeo pendiente.
+  const { luzOcupacion } = require('../lib/operacion/mejorasV9.ts')
+  for (const [carga, capacidad, porcentaje, color] of [[6, 10, 60, 'ámbar'], [0, 10, 0, 'vacío'], [9, 10, 90, 'rojo'], [2, 10, 20, 'verde'], [2, 0, undefined, 'no disponible']]) {
+    const e = { ...baseEstado, fisico: { ...baseEstado.fisico, vehiculos: [{ ...baseEstado.fisico.vehiculos[0], carga, capacidad }] } }
+    const v = datosMapa(e, null, []).vehiculos[0]
+    assert.equal(v.ocupacionPct, porcentaje)
+    assert.equal(luzOcupacion(v.ocupacionPct ?? null, v.capacidad), color)
+    assert.equal(datosMapa({ ...e, versionEstado: 2 }, null, []).vehiculos[0].ocupacionPct, porcentaje)
+  }
   {
     const ventana = { id: 22, tipo: 'MANTENIMIENTO', vehiculoId: 2, instanteH: 2, finH: 4, activa: true, tramos: [] }
     const entrada = (h, disponible, incidencias) => datosMapa({ ...baseEstado, relojH: h, fisico: { ...baseEstado.fisico, relojH: h, vehiculos: baseEstado.fisico.vehiculos.map(v => v.id === 2 ? { ...v, disponible } : v) } }, null, [], incidencias)
@@ -249,7 +259,7 @@ async function main() {
     assert.equal(unidadesParaAveria(sinConfirmacion, true).some(u => u.id === 2), false, 'el reloj no finaliza la incidencia')
     assert.equal(unidadesParaAveria(despues, false).length, 0, 'un mapa desactualizado no habilita unidades')
     const fichaVieja = renderToStaticMarkup(React.createElement(PanelFlota, { ...propsMantenimiento, detalle: 'desactualizado', unidades: [{ ...ejemploUnidad, estado: 'EN_MANTENIMIENTO' }], incidencias: [ventana] }))
-    assert.ok(fichaVieja.includes('desactualizado') && fichaVieja.includes('EN MANTENIMIENTO'))
+    assert.ok(fichaVieja.includes('desactualizado') && fichaVieja.includes('En mantenimiento'))
   }
   const pedido = { id: 1, codigo: 'P1', posX: 1, posY: 1, cantidad: 4, tipo: 'REGULAR', horaIngresoH: 0, fechaLimiteH: 36, estado: 'PENDIENTE', entregadoEnH: null }
   const ruta = (id, vehiculoId) => ({ id, vehiculoId, tipoVehiculo: vehiculoId === 1 ? 'AUTO' : 'MOTO', horaInicioH: 0, horaFinH: 4, trazado: [{ secuencia: 0, x: 0, y: 0, instanteH: 0 }, { secuencia: 1, x: 1, y: 0, instanteH: 1 }], paradas: [{ pedidoId: 1, codigoPedido: 'P1', secuencia: 0, etaH: 1, entregado: false, cantidad: 2 }] })

@@ -22,7 +22,7 @@ export interface EstadoOperacion {
 
 export interface PuntoTrazado { secuencia: number; x: number; y: number; instanteH: number }
 export interface Parada { pedidoId: number; codigoPedido: string; secuencia: number; etaH: number; entregado: boolean; cantidad: number | null; entregaId?: string | null }
-export interface RutaPlan { id: number; vehiculoId: number; tipoVehiculo: TipoVehiculo; horaInicioH: number; horaFinH: number; distanciaKm: number; costo: number; cargaTotal: number; paradas: Parada[]; trazado: PuntoTrazado[] }
+export interface RutaPlan { id: number; vehiculoId: number; tipoVehiculo: TipoVehiculo; horaInicioH: number; horaFinH: number; distanciaKm: number; costo: number; cargaTotal: number; paradas: Parada[]; trazado: PuntoTrazado[]; almacenId?:number|null;almacenRetornoId?:number|null;cargaInicial?:number|null;cargaFinal?:number|null;cargado?:number|null }
 export interface PlanDistribucion { id: number; version: number; algoritmo: string; instanteH: number; costoTotal: number; distanciaTotalKm: number; cantidadRutas: number; pedidosAtendidos: number; rutas: RutaPlan[] }
 
 export type EstadoPedido = 'PENDIENTE' | 'ASIGNADO' | 'EN_RUTA' | 'ENTREGADO' | 'NO_ENTREGADO'
@@ -71,6 +71,10 @@ export interface UnidadOperativa {
   pedidos: { id: number; codigo: string; cantidad: number; etaH: number | null; enServicio: boolean }[]
   averia: { incidenciaId: number; tipo: 1 | 2 | 3 | null; desdeH: number; hastaH: number | null; trasladoH: number | null } | null
   recorridoKm: number
+  etaDestinoH?: number | null
+  minutosAlDestino?: number | null
+  minutosDesdeSalida?: number | null
+  enAlmacen?: boolean
 }
 export interface UnidadesOperacion { versionContrato: number; escenarioId: number; relojH: number; unidades: UnidadOperativa[] }
 
@@ -114,6 +118,10 @@ const unidadValida = (u: unknown) => objeto(u) && numeros(u, ['id', 'capacidad',
 /** Rechaza una respuesta incompatible en lugar de inventar una instantánea vacía. */
 export async function consultarInstantanea(escenarioId: number, signal?: AbortSignal): Promise<InstantaneaOperacion> {
   const v = await pedir<unknown>(`/api/escenarios/${escenarioId}/mapa`, { signal })
+  return validarInstantanea(v,escenarioId)
+}
+
+export function validarInstantanea(v:unknown,escenarioId:number):InstantaneaOperacion {
   if (!encabezadoValido(v, escenarioId) || !Number.isSafeInteger(v.versionEstado) || typeof v.aplicable !== 'boolean' ||
       !Array.isArray(v.pedidos) || !v.pedidos.every(pedidoValido) || !Array.isArray(v.incidencias) || !v.incidencias.every(incidenciaValida) ||
       (v.fisico !== null && (!objeto(v.fisico) || !numero(v.fisico.relojH) || !Array.isArray(v.fisico.almacenes) || !v.fisico.almacenes.every(almacenValido) || !Array.isArray(v.fisico.vehiculos) || !v.fisico.vehiculos.every(vehiculoValido) || !Array.isArray(v.fisico.servicios) || !v.fisico.servicios.every(servicioValido))) ||
@@ -125,10 +133,21 @@ export async function consultarInstantanea(escenarioId: number, signal?: AbortSi
 
 export async function consultarUnidades(escenarioId: number, signal?: AbortSignal): Promise<UnidadesOperacion> {
   const v = await pedir<unknown>(`/api/escenarios/${escenarioId}/unidades`, { signal })
+  return validarUnidades(v,escenarioId)
+}
+
+export function validarUnidades(v:unknown,escenarioId:number):UnidadesOperacion {
   if (!encabezadoValido(v, escenarioId) || !Array.isArray(v.unidades) || !v.unidades.every(unidadValida)) {
     throw new Error('Contrato inválido de unidades operativas')
   }
   return v as unknown as UnidadesOperacion
+}
+
+export async function consultarVistaOperativa(escenarioId:number,signal?:AbortSignal){
+ const v=await pedir<{mapa:unknown;unidades:unknown}>(`/api/escenarios/${escenarioId}/vista`,{signal})
+ const mapa=validarInstantanea(v.mapa,escenarioId),unidades=validarUnidades(v.unidades,escenarioId)
+ if(mapa.relojH!==unidades.relojH)throw new Error('Mapa y flota no comparten el mismo corte')
+ return {mapa,unidades}
 }
 
 export const consultarEstado = (escenarioId: number) => pedir<EstadoOperacion>(`/api/escenarios/${escenarioId}/estado`)
@@ -173,12 +192,13 @@ export interface PedidoRastreo {
 }
 
 export interface MapaDatos {
+  planAplicable?:boolean
   relojH: number
   /** pct: stock disponible en % de la capacidad; null en el almacén central (ilimitado). */
   almacenes: (AlmacenFisico & { vehiculosEnBase: number; pct: number | null; unidadesFuera: number; pedidosPorEntregar: number })[]
   /** Posiciones físicas confirmadas, incluidas unidades sin ruta. */
   vehiculos: { id: number; codigo: string; tipo: TipoVehiculo; x: number; y: number; carga: number; capacidad: number; ocupacionPct?: number; estado?: EstadoUnidad; direccion?: number | null }[]
-  rutas: { id: number; vehiculoId: number; tipo: TipoVehiculo; puntos: [number, number][]; recorrido: [number, number][] }[]
+  rutas: { id: number; vehiculoId: number; tipo: TipoVehiculo; puntos: [number, number][]; recorrido: [number, number][];porRecorrer?:[number,number][];pendientePlan?:boolean;tramoFisico?:boolean }[]
   /** Pedidos aún no entregados, con su semáforo de margen (fecha límite − ETA). */
   pedidos: { id: number; codigo: string; x: number; y: number; cantidad: number; estado: EstadoPedido; semaforo: Semaforo; margenH: number | null }[]
   /** Todos los pedidos del escenario, para el buscador. */
@@ -213,7 +233,7 @@ function posicionEn(trazado: PuntoTrazado[], t: number): { x: number; y: number;
   return { x: u.x, y: u.y, indice: trazado.length - 1 }
 }
 
-export function datosMapa(estado: EstadoOperacion, plan: PlanDistribucion | null, pedidos: Pedido[], incidencias: Incidencia[] = []): MapaDatos {
+export function datosMapa(estado: EstadoOperacion, plan: PlanDistribucion | null, pedidos: Pedido[], incidencias: Incidencia[] = [],aplicable=true): MapaDatos {
   const reloj = estado.fisico?.relojH ?? estado.relojH
   const fisicos = estado.fisico?.vehiculos ?? []
   const rutasActivas = (plan?.rutas ?? []).filter(r => r.trazado.length > 1 && r.horaFinH >= reloj)
@@ -225,15 +245,19 @@ export function datosMapa(estado: EstadoOperacion, plan: PlanDistribucion | null
   for (const s of estado.fisico?.servicios ?? []) if (!s.confirmada) enRuta.add(s.vehiculoId)
 
   const vehiculos = fisicos.map(v => ({ id: v.id, codigo: v.codigo, tipo: v.tipo,
-    x: v.residual?.x ?? v.x, y: v.residual?.y ?? v.y, carga: v.carga, capacidad: v.capacidad }))
+    x: v.residual?.x ?? v.x, y: v.residual?.y ?? v.y, carga: v.carga, capacidad: v.capacidad,
+    // El color depende de esta misma instantánea, incluso mientras se actualizan las fichas.
+    ocupacionPct: Number.isFinite(v.carga) && Number.isFinite(v.capacidad) && v.capacidad > 0 ? v.carga / v.capacidad * 100 : undefined }))
 
-  const rutas = rutasActivas.map(r => {
+  const rutas:MapaDatos['rutas'] = rutasActivas.map(r => {
     const p = posicionEn(r.trazado, reloj)
     const puntos = r.trazado.map(q => [q.x, q.y] as [number, number])
     // Lo ya recorrido se dibuja tenue; lo que falta, sólido
     const recorrido = r.horaInicioH <= reloj ? [...puntos.slice(0, p.indice), [p.x, p.y] as [number, number]] : []
-    return { id: r.id, vehiculoId: r.vehiculoId, tipo: r.tipoVehiculo, puntos, recorrido }
+    const porRecorrer=r.horaInicioH<=reloj?[[p.x,p.y] as [number,number],...puntos.slice(p.indice)]:puntos
+    return { id: r.id, vehiculoId: r.vehiculoId, tipo: r.tipoVehiculo, puntos, recorrido,porRecorrer,pendientePlan:!aplicable }
   })
+  if(!aplicable||!rutas.length)for(const v of fisicos)if(v.residual){const q=v.residual;rutas.push({id:-v.id,vehiculoId:v.id,tipo:v.tipo,puntos:[[q.x,q.y],[q.destinoX,q.destinoY]],recorrido:[],tramoFisico:true})}
 
   // Qué ruta lleva cada pedido y cuándo llega su última parte (un pedido puede repartirse en varias paradas)
   const eta = new globalThis.Map<number, number>()
@@ -289,7 +313,7 @@ export function datosMapa(estado: EstadoOperacion, plan: PlanDistribucion | null
   const flota = fisicos.map(v => ({ id: v.id, codigo: v.codigo, tipo: v.tipo, disponible: v.disponible, enRuta: enRuta.has(v.id), averiada: averiadas.has(v.id) }))
 
   return {
-    relojH: reloj, almacenes, vehiculos, rutas, pedidos: marcas, rastreo, flota, incidencias, acumulado: estado.acumulado ?? null,
+    relojH: reloj, planAplicable:aplicable,almacenes, vehiculos, rutas, pedidos: marcas, rastreo, flota, incidencias, acumulado: estado.acumulado ?? null,
     resumen: { pedidosAbiertos: abiertos.length, vehiculosEnRuta: enRuta.size, costoPlan: plan?.costoTotal ?? null, distanciaPlanKm: plan?.distanciaTotalKm ?? null, algoritmo: plan?.algoritmo ?? null },
   }
 }

@@ -1,41 +1,37 @@
 'use client'
-
-import { useEffect, useRef, useState } from 'react'
-import { direccionEn, type InstantaneaOperacion } from '../api/operacion'
-import { animarIntervalo, movimientoPermitido, puntoCertificado, tramoConfirmado } from './movimiento'
-
-type Posiciones = Record<number, { x: number; y: number; direccion: number | null }>
-const posicion = (v: NonNullable<InstantaneaOperacion['fisico']>['vehiculos'][number]) => v.residual ? { x: v.residual.x, y: v.residual.y } : { x: v.x, y: v.y }
-
-/** Interpola únicamente entre dos instantáneas confirmadas; jamás extrapola. */
-export function useMovimiento(mapa: InstantaneaOperacion | null, activo: boolean): Posiciones {
-  const anterior = useRef<InstantaneaOperacion | null>(null)
-  const [posiciones, setPosiciones] = useState<Posiciones>({})
-  const id = mapa?.escenarioId, version = mapa?.versionEstado, reloj = mapa?.relojH, planId = mapa?.plan?.id, aplicable = mapa?.aplicable
-  useEffect(() => {
-    const preferencia = window.matchMedia('(prefers-reduced-motion: reduce)')
-    const previo = anterior.current
-    anterior.current = mapa
-    setPosiciones({})
-    if (!movimientoPermitido(previo, mapa, activo, preferencia.matches) || !mapa?.fisico || !previo?.fisico) return
-    const anteriores = new Map(previo.fisico.vehiculos.map(v => [v.id, v]))
-    const animables = mapa.fisico.vehiculos.flatMap(v => {
-      const viejo = anteriores.get(v.id)
-      const ruta = mapa.plan?.rutas.find(r => r.vehiculoId === v.id && r.horaInicioH <= previo.relojH && r.horaFinH >= mapa.relojH)
-      return viejo && ruta && tramoConfirmado(ruta.trayectoria, previo.relojH, mapa.relojH, posicion(viejo), posicion(v)) ? [{ id: v.id, aristas: ruta.trayectoria }] : []
-    })
-    if (!animables.length) return
-    const pintar = (fraccion: number) => {
-      const horaVisual = previo.relojH + (mapa.relojH - previo.relojH) * fraccion
-      const nuevos: Posiciones = {}
-      for (const v of animables) { const p = puntoCertificado(v.aristas, horaVisual); if (p) nuevos[v.id] = { ...p, direccion: direccionEn(v.aristas, horaVisual) } }
-      setPosiciones(nuevos)
-      if (fraccion === 1) setPosiciones({})
-    }
-    const cancelar = animarIntervalo(pintar, requestAnimationFrame, cancelAnimationFrame)
-    const detener = (e: MediaQueryListEvent) => { if (e.matches) { cancelar(); setPosiciones({}) } }
-    preferencia.addEventListener('change', detener)
-    return () => { cancelar(); preferencia.removeEventListener('change', detener) }
-  }, [id, version, reloj, planId, aplicable, activo])
-  return posiciones
+import {useLayoutEffect,useRef,useState} from 'react'
+import {direccionEn,type InstantaneaOperacion} from '../api/operacion'
+import {animarIntervalo,movimientoPermitido,puntoCertificado,trayectoriaConfirmada} from './movimiento'
+type Posiciones=Record<number,{x:number;y:number;direccion:number|null}>
+/** Animación de lecturas confirmadas, sin extrapolar y sin volver al nodo en cada sondeo. */
+export function useMovimiento(mapa:InstantaneaOperacion|null,activo:boolean):Posiciones{
+ const anterior=useRef<InstantaneaOperacion|null>(null),recibido=useRef<number|null>(null)
+ const visual=useRef<{id:number;hora:number;posiciones:Posiciones}|null>(null)
+ const [posiciones,setPosiciones]=useState<Posiciones>({})
+ useLayoutEffect(()=>{
+  const preferencia=window.matchMedia('(prefers-reduced-motion: reduce)'),previo=anterior.current,ahora=performance.now()
+  const duracion=recibido.current==null?1500:Math.min(2500,Math.max(250,ahora-recibido.current))
+  anterior.current=mapa;recibido.current=ahora
+  if(!movimientoPermitido(previo,mapa,activo,preferencia.matches)||!mapa?.fisico||!previo?.fisico){visual.current=null;setPosiciones({});return}
+  const anteriorVisual=visual.current?.id===mapa.escenarioId?visual.current:null
+  const animables=mapa.fisico.vehiculos.flatMap(v=>{
+   const aristas=trayectoriaConfirmada(previo,mapa,v.id);if(!aristas)return []
+   let desdeH=previo.relojH
+   const visto=anteriorVisual?.posiciones[v.id],p=anteriorVisual?puntoCertificado(aristas,anteriorVisual.hora):null
+   if(visto&&p&&Math.hypot(visto.x-p.x,visto.y-p.y)<0.01)desdeH=anteriorVisual!.hora
+   return [{id:v.id,aristas,desdeH}]
+  })
+  if(!animables.length){visual.current=null;setPosiciones({});return}
+  const pintar=(f:number)=>{
+   const nuevos:Posiciones={};let hora=mapa.relojH
+   for(const v of animables){const h=v.desdeH+(mapa.relojH-v.desdeH)*f,p=puntoCertificado(v.aristas,h);if(p){nuevos[v.id]={...p,direccion:direccionEn(v.aristas,h)};hora=Math.min(hora,h)}}
+   visual.current={id:mapa.escenarioId,hora,posiciones:nuevos};setPosiciones(nuevos)
+  }
+  pintar(0) // useLayoutEffect evita pintar primero el extremo nuevo y saltar de vuelta al anterior.
+  const cancelar=animarIntervalo(pintar,requestAnimationFrame,cancelAnimationFrame,duracion)
+  const detener=(e:MediaQueryListEvent)=>{if(e.matches){cancelar();visual.current=null;setPosiciones({})}}
+  preferencia.addEventListener('change',detener)
+  return()=>{cancelar();preferencia.removeEventListener('change',detener)}
+ },[mapa?.escenarioId,mapa?.versionEstado,mapa?.relojH,mapa?.plan?.id,mapa?.aplicable,activo])
+ return posiciones
 }

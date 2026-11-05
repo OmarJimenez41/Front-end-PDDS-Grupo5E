@@ -13,6 +13,14 @@ import { useMovimiento } from '@/lib/operacion/useMovimiento'
 import { PanelFlota, ocupacion } from '@/components/operacion/PanelFlota'
 import { PanelEnvios } from '@/components/operacion/PanelEnvios'
 import { MapaOperativo } from '@/components/operacion/MapaOperativo'
+import { estadoEnEspanol } from '@/lib/operacion/mejorasV9'
+import { PanelIndicadoresV9 } from '@/components/operacion/PanelIndicadoresV9'
+import { PanelAlmacenesV9 } from '@/components/operacion/PanelAlmacenesV9'
+import { PanelDatosV9 } from '@/components/operacion/PanelDatosV9'
+import { PanelReportesV9 } from '@/components/operacion/PanelReportesV9'
+import { PanelIncidenciasV9 } from '@/components/operacion/PanelIncidenciasV9'
+import { ContextoV9, useV9 } from '@/components/operacion/ContextoV9'
+import { HerramientasV9 } from '@/components/operacion/HerramientasV9'
 import { UmbralesCtx } from '@/components/operacion/umbrales'
 import { type Cobertura, type OperacionActual, type VistaSimulacion, consultarSimulacion, detenerSimulacion, iniciarCincoDias, iniciarColapso, mensajeError, operacionActual, operacionDesdeVista, pausarSimulacion, reanudarSimulacion, subirDatos, subirVentas, validarCobertura } from '@/lib/api/simulacion'
 
@@ -41,18 +49,14 @@ const simViva = (sim: VistaSimulacion | null) => sim?.simulacion.estado === 'EJE
 const stateLabels: Record<ExecState, string> = { idle: 'Lista · sin iniciar', running: 'En ejecución', incident: 'Incidencia activa', complete: 'Periodo completado', collapse: 'Colapso logístico', disconnected: 'Solo consulta · desconectado' }
 
 function Header({ scenario, state, replanned, sim, segReal, escenario, dia, estadoUrl, idUrl }: { estadoUrl?: string; idUrl?: number | null; scenario: Scenario; state: ExecState; replanned: boolean; sim: VistaSimulacion | null; segReal: number; escenario?: { id: number; relojH: number; dia: boolean; fecha: string } | null; dia?: OperacionActual | null }) {
-  const day = state === 'idle' && scenario !== 'day' ? (scenario === 'five' ? 'Sin iniciar · dura 5 días desde el inicio' : 'Sin iniciar · sin límite de periodo') : scenario === 'five' ? (state === 'complete' ? 'Día 5 de 5' : state === 'incident' ? 'Día 3 de 5' : 'Día 2 de 5') : scenario === 'day' ? (replanned && state === 'running' ? '08/09/2026 · 10:45 · plan actualizado' : '08/09/2026 · 08:35') : state === 'collapse' ? '11/09/2026 · 16:42' : 'Sin límite de periodo'
-  const incidentView = state === 'incident'
-  // La simulación en pausa se ve como tal en todos los dispositivos (el estado viene del back-end)
-  const pausa = sim?.simulacion.estado === 'PAUSADA' || (!sim && escenario?.dia && dia?.estadoMotor === 'PAUSADA')
-  const collapseView = scenario === 'collapse' && state === 'collapse'
-  const fiveDayRunning = scenario === 'five' && state === 'running'
-  const headerScenario = !sim && idUrl != null ? `Escenario ${idUrl} del back-end` : !sim && escenario ? (escenario.dia ? scenarioLabels.day : `Escenario ${escenario.id} del back-end`) : sim?.simulacion.tipo === 'COLAPSO' ? scenarioLabels.collapse : collapseView ? 'Simulación hasta el colapso logístico' : incidentView ? (scenario === 'day' ? 'Operación día a día · tiempo real' : 'Simulación de cinco días') : scenarioLabels[scenario]
-  // Con una simulación del back-end, la fecha es la que está simulando el servidor (día, hora, minuto y segundo)
-  const colapsoReal = sim?.simulacion.tipo === 'COLAPSO'
-  const real = sim && scenario !== 'day' ? (colapsoReal ? `Día ${Math.floor((sim.simulacion.relojH - sim.simulacion.inicioH) / 24) + 1} · ${fechaHora(sim.fechaSimulada, true)}` : `Día ${Math.min(5, Math.floor(sim.progreso * 5) + 1)} de 5 · ${fechaHora(sim.fechaSimulada, true)}`) : null
-  const headerDate = real ?? (!sim && escenario ? (escenario.dia ? escenario.fecha : `Hora simulada ${horaSimulada(escenario.relojH)}`) : null) ?? (idUrl != null && !sim ? 'Esperando datos del escenario' : scenario === 'day' ? 'Esperando datos de la operación' : day)
-  return <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-2"><div className="flex items-center gap-4"><div className="flex size-9 items-center justify-center bg-blue-700 text-white"><Navigation className="size-5" /></div><div><p className="text-lg font-bold">PaqRap</p><p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Centro de control</p></div><div className="hidden h-8 w-px bg-slate-200 md:block" /><div className="hidden md:block"><p className="text-sm font-bold">{headerScenario}</p><p className="text-xs text-slate-500">{headerDate}</p>{collapseView && !sim && <p className="text-xs font-semibold text-slate-500">Duración total 00:37:26</p>}{incidentView && <p className="text-xs font-semibold text-slate-500">Tiempo transcurrido 00:32:10</p>}{fiveDayRunning && !real && <p className="text-xs font-semibold text-slate-500">Tiempo transcurrido {replanned ? '00:34:50' : '00:18:42'}</p>}{real && sim && <p className="text-xs font-semibold text-slate-700">Tiempo real transcurrido {duracion(segReal)}</p>}{real && sim && <p className="text-xs font-semibold text-slate-500">{colapsoReal ? `Sin fecha de fin · ${sim.simulacion.pedidosIncorporados} pedidos ingresados` : `Avance ${Math.round(sim.progreso * 100)}% · ${sim.simulacion.pedidosIncorporados} de ${sim.simulacion.pedidosProgramados} pedidos ingresados`}</p>}</div></div><p className="flex items-center gap-2 text-[11px] text-slate-500"><span className="font-semibold uppercase tracking-wider">Estado</span><span role="status" className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-bold ${estadoUrl && estadoUrl !== 'En ejecución' ? 'bg-amber-100 text-amber-800' : pausa ? 'bg-amber-100 text-amber-800' : state === 'incident' || state === 'collapse' ? 'bg-red-100 text-red-700' : state === 'disconnected' ? 'bg-amber-100 text-amber-800' : state === 'complete' ? 'bg-slate-100 text-slate-600' : 'bg-emerald-100 text-emerald-800'}`}><span className={`size-1.5 rounded-full bg-current ${state === 'running' && !pausa ? 'animate-pulse' : ''}`} />{estadoUrl ?? (pausa ? 'En pausa' : !sim && escenario?.dia && dia?.estadoMotor && dia.estadoMotor !== 'EJECUTANDO' ? `Motor: ${dia.estadoMotor}` : stateLabels[state])}</span></p></header>
+  const tipo=sim?.simulacion.tipo??(escenario?.dia?'DIA_A_DIA':scenario==='five'?'CINCO_DIAS':scenario==='collapse'?'COLAPSO':'DIA_A_DIA')
+  const titulo=tipo==='DIA_A_DIA'?'Operación día a día':tipo==='CINCO_DIAS'?'Simulación de cinco días':'Simulación hasta el colapso'
+  const fecha=sim?.fechaSimulada?fechaHora(sim.fechaSimulada,true):escenario?.fecha??(dia?.fechaHora?fechaHora(dia.fechaHora,true):'Esperando datos de la operación')
+  const estado=estadoUrl??(sim?estadoEnEspanol(sim.simulacion.estado):dia?.estadoMotor?estadoEnEspanol(dia.estadoMotor):stateLabels[state])
+  const ejecutando=sim?sim.simulacion.estado==='EJECUTANDO':dia?.estadoMotor==='EJECUTANDO'
+  const pausada=sim?sim.simulacion.estado==='PAUSADA':dia?.estadoMotor==='PAUSADA'
+  const error=sim?.simulacion.estado==='ERROR'||state==='disconnected'
+  return <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-5"><div className="flex min-w-0 items-center gap-3"><div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-700 text-white"><Navigation className="size-5"/></div><div><p className="text-lg font-bold">PaqRap</p><p className="text-[9px] font-semibold uppercase tracking-widest text-slate-400">Centro de control</p></div><div className="ml-2 hidden border-l border-slate-200 pl-4 sm:block"><p className="text-sm font-bold">{titulo}{idUrl!=null&&<span className="ml-2 rounded bg-slate-100 px-2 py-1 text-[10px] font-normal text-slate-500">Escenario {idUrl}</span>}</p><p className="mt-1 text-xs text-slate-500">{fecha}</p></div></div><span role="status" className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ${error?'bg-red-50 text-red-700':ejecutando?'bg-emerald-50 text-emerald-700':pausada?'bg-amber-50 text-amber-800':'bg-slate-100 text-slate-600'}`}><span className={`size-1.5 rounded-full bg-current ${ejecutando?'animate-pulse':''}`}/>{estado}</span><p className="order-last w-full text-xs font-semibold text-slate-600 sm:hidden">{titulo} · {fecha}</p></header>
 }
 
 // Un solo estilo de pestaña para toda la aplicación: las principales (Nav) y las de escenario del operador
@@ -151,23 +155,24 @@ const CLASE_SEMAFORO = { verde: 'bg-emerald-600', ambar: 'bg-amber-500', rojo: '
 // Nombres que usa el panel del operador para cada almacén del back-end
 const NOMBRE_ALMACEN: Record<string, string> = { 'ALM-CENTRAL': 'Almacén central', 'ALM-NOROESTE': 'Nor-Oeste', 'ALM-ESTE': 'Intermedio Este' }
 
-// Semáforo de stock de los almacenes intermedios (% disponible); los mismos valores por defecto del panel de parámetros
+// Semáforo de existencias de los almacenes intermedios (% disponible); los mismos valores por defecto del panel de parámetros
 const UMBRAL_STOCK = { verde: 50, rojo: 20 }
-const tonoStock = (pct: number, u: Umbrales) => pct >= u.verde ? 'verde' : pct < u.rojo ? 'rojo' : 'ambar'
+const tonoStock = (pct: number, u: Umbrales) => pct === 0 ? 'vacío' : pct >= u.verde ? 'verde' : pct < u.rojo ? 'rojo' : 'ambar'
 // Umbrales vigentes de los dos semáforos: los fija el operador en «Parámetros operativos» y los usan mapa, leyenda y fichas
 
-const TEXTO_SEMAFORO = { verde: 'text-emerald-700', ambar: 'text-amber-700', rojo: 'text-red-700' } as const
+const TEXTO_SEMAFORO = { 'vacío': 'text-slate-700', verde: 'text-emerald-700', ambar: 'text-amber-700', rojo: 'text-red-700' } as const
 const ETIQUETA_ESTADO: Record<EstadoPedido, string> = { PENDIENTE: 'Pendiente de asignar', ASIGNADO: 'Asignado a una ruta', EN_RUTA: 'En ruta', ENTREGADO: 'Entregado', NO_ENTREGADO: 'No entregado' }
 
 // Buscador de pedidos por código (CU de consulta): resalta el pedido en el mapa y muestra su ficha
 function BuscarPedido({ rastreo, buscado, setBuscado, hora, onUnidad }: { rastreo: PedidoRastreo[]; buscado: string | null; setBuscado: (c: string | null) => void; hora: (h: number) => string; onUnidad: (id: number) => void }) {
+  const v9=useV9()
   const [texto, setTexto] = useState('')
   const [lista, setLista] = useState(false)
   const q = texto.trim().toLowerCase()
   const coincidencias = q ? rastreo.filter(x => x.codigo.toLowerCase().includes(q)).slice(0, 8) : []
   const ficha = buscado ? rastreo.find(x => x.codigo === buscado) ?? null : null
-  const elegir = (codigo: string) => { setBuscado(codigo); setTexto(codigo); setLista(false) }
-  const limpiar = () => { setTexto(''); setBuscado(null); setLista(false) }
+  const elegir = (codigo: string) => { v9.setRutasConsulta([]);v9.setRutaProducto(null);setBuscado(codigo); setTexto(codigo); setLista(false) }
+  const limpiar = () => { v9.setRutasConsulta([]);v9.setRutaProducto(null);setTexto(''); setBuscado(null); setLista(false) }
   return <div className="relative w-80 max-w-full text-xs">
     <form role="search" onSubmit={e => { e.preventDefault(); const c = rastreo.find(x => x.codigo.toLowerCase() === q) ?? coincidencias[0]; if (c) elegir(c.codigo) }} className="flex items-center border border-slate-300 bg-white shadow focus-within:border-blue-600">
       <Search className="ml-2.5 size-4 shrink-0 text-slate-400" />
@@ -184,6 +189,7 @@ function BuscarPedido({ rastreo, buscado, setBuscado, hora, onUnidad }: { rastre
 
 function FichaPedido({ p, hora, onCerrar, onUnidad }: { p: PedidoRastreo; hora: (h: number) => string; onCerrar: () => void; onUnidad: (id: number) => void }) {
   const u = useContext(UmbralesCtx)
+  const v9 = useV9()
   const cerrado = p.estado === 'ENTREGADO' || p.estado === 'NO_ENTREGADO'
   const plazo = Math.round(p.fechaLimiteH - p.horaIngresoH)
   const tono = p.estado === 'NO_ENTREGADO' ? 'border-red-200 bg-red-50 text-red-700' : p.estado === 'ENTREGADO' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-blue-200 bg-blue-50 text-blue-700'
@@ -192,7 +198,7 @@ function FichaPedido({ p, hora, onCerrar, onUnidad }: { p: PedidoRastreo; hora: 
     ['Tipo', `${p.tipo === 'PRIORIZADO' ? 'Priorizado' : 'Regular'} · plazo ${plazo} h`],
     ['Ingreso', hora(p.horaIngresoH)],
     ['Fecha límite', hora(p.fechaLimiteH)],
-    ['Rutas y unidades', p.asociaciones.length ? <span key="asociaciones" className="flex flex-col gap-1">{p.asociaciones.map((a, i) => <button key={`${a.rutaId}-${i}`} onClick={() => onUnidad(a.vehiculoId)} className="text-left text-blue-700 underline">{a.rutaId == null ? 'Servicio en curso' : `Ruta ${a.rutaId}`} · {a.vehiculoCodigo ?? 'Unidad no disponible'} · {a.cantidad == null ? 'cantidad no disponible' : `${a.cantidad} u`} · ETA {hora(a.etaH)}{a.entregado ? ' · entregado' : a.enServicio ? ' · en servicio' : ''}</button>)}</span> : cerrado ? 'Sin ruta vigente' : 'Sin asignación'],
+    ['Rutas y unidades', p.asociaciones.length ? <span key="asociaciones" className="flex flex-col gap-1">{p.asociaciones.map((a, i) => <button key={`${a.rutaId}-${i}`} onClick={() => { v9.setRutaProducto(a.rutaId); onUnidad(a.vehiculoId) }} aria-label={a.rutaId == null ? `Ver unidad ${a.vehiculoCodigo ?? a.vehiculoId}` : `Ver ruta ${a.rutaId} del pedido ${p.codigo}`} className="rounded-lg border border-blue-100 bg-blue-50 px-2 py-2 text-left text-blue-700 hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-blue-600">{a.rutaId == null ? 'Servicio en curso' : `Ruta ${a.rutaId}`} · {a.vehiculoCodigo ?? 'Unidad no disponible'} · {a.cantidad == null ? 'cantidad no disponible' : `${a.cantidad} u`} · ETA {hora(a.etaH)}{a.entregado ? ' · entregado' : a.enServicio ? ' · en servicio' : ''}</button>)}</span> : cerrado ? 'Sin ruta vigente' : 'Sin asignación'],
     cerrado
       ? ['Entrega', p.entregadoEnH != null ? `${hora(p.entregadoEnH)} · ${p.entregadoEnH <= p.fechaLimiteH ? 'a tiempo' : 'fuera de plazo'}` : 'Sin entregar']
       : ['Llegada estimada', p.etaH != null ? hora(p.etaH) : 'Sin ruta asignada'],
@@ -296,131 +302,30 @@ function EscenarioTabs({ scenario, bloqueadas, onCambiar }: { scenario: Scenario
 }
 
 // Contenido de la pestaña elegida: el día a día no se inicia (siempre está activo); cada simulación se configura e inicia
-function ScenarioSelect({ scenario, onStart }: { scenario: Scenario; onStart: (tipo: SimType, start: string) => Promise<void> }) {
-  const [start, setStart] = useState('2026-09-08T08:00')
-  const [starting, setStarting] = useState(false)
-  const [startError, setStartError] = useState('')
-  const [coverage, setCoverage] = useState<Cobertura | null>(null)
-  const [coverageError, setCoverageError] = useState('')
-  const [subida, setSubida] = useState<{ ok: boolean; texto: string } | null>(null)
-  const [subidas, setSubidas] = useState(0)
-  // LE072: cargar un archivo mensual de ventas al servidor; luego se vuelve a validar la cobertura
-  const subir = async (archivo: File | undefined) => {
-    if (!archivo) return
-    setSubida({ ok: true, texto: `Subiendo ${archivo.name}…` })
-    try { const r = await subirVentas(archivo); setSubida({ ok: true, texto: `${archivo.name} guardado como ${r.guardadoComo}: ${r.pedidos} pedidos${r.lineasInvalidas > 0 ? ` · ${r.lineasInvalidas} líneas inválidas ignoradas` : ''}.` }); setSubidas(n => n + 1) }
-    catch (e) { setSubida({ ok: false, texto: mensajeError(e) }) }
-  }
-  // Bloqueos planificados del curso: el .zip completo (bloqueo.AAMM.txt por mes) o un archivo suelto.
-  // Son opcionales; sin ellos la simulación corre sin bloqueos planificados
-  const subirB = async (archivo: File | undefined) => {
-    if (!archivo) return
-    setSubida({ ok: true, texto: `Subiendo ${archivo.name}…` })
-    try {
-      const r = await subirDatos(archivo)
-      const b = r.archivos.filter(a => a.tipo === 'BLOQUEOS')
-      const bloqueos = b.reduce((n, a) => n + a.leidos, 0), invalidos = b.reduce((n, a) => n + a.invalidos, 0)
-      const otros = r.archivos.length - b.length
-      setSubida({ ok: b.length > 0, texto: b.length === 0 ? `${archivo.name} no trae archivos de bloqueos (bloqueo.AAMM.txt).`
-        : `${archivo.name}: ${b.length === 1 ? b[0].nombre : `${b.length} archivos`} · ${bloqueos.toLocaleString('es-PE')} bloqueos cargados${invalidos > 0 ? ` · ${invalidos} líneas inválidas ignoradas` : ''}${otros > 0 ? ` · ${otros} archivos de otros datos` : ''}${r.omitidos.length > 0 ? ` · omitidos: ${r.omitidos.join(', ')}` : ''}.` })
-      setSubidas(n => n + 1)
-    }
-    catch (e) { setSubida({ ok: false, texto: mensajeError(e) }) }
-  }
-  // CU-02: al elegir la fecha se consulta si los archivos de ventas cubren los cinco días
-  useEffect(() => {
-    if (scenario === 'day' || !start) return
-    let vigente = true
-    const t = setTimeout(() => {
-      validarCobertura(start)
-        .then(c => { if (vigente) { setCoverage(c); setCoverageError('') } })
-        .catch(e => { if (vigente) { setCoverage(null); setCoverageError(mensajeError(e)) } })
-    }, 400)
-    return () => { vigente = false; clearTimeout(t) }
-  }, [scenario, start, subidas])
-  const start5 = async () => {
-    setStarting(true); setStartError('')
-    try { await onStart(scenario as SimType, start) } catch (e) { setStartError(mensajeError(e)) } finally { setStarting(false) }
-  }
-  // Cinco días exige datos para todo el periodo; el colapso arranca con lo que haya y termina cuando se acaban
-  const fiveBlocked = !start || starting || (scenario === 'five' && coverage !== null && coverage.faltantes.length > 0)
-
-  if (scenario === 'day') return <section className="text-xs text-slate-600">
-    <p className="text-sm font-bold text-slate-900">Operación en tiempo real</p>
-    <p className="mt-1">Es el uso normal del sistema con los pedidos que se registran. El servidor recupera la operación; su estado se indica en el encabezado.</p>
-    <p className="mt-2">Desde aquí puedes registrar <b>incidencias</b>, revisar el <b>rendimiento</b> y el stock de cada almacén.</p>
-    <p className="mt-2 text-slate-500">Para probar el sistema con un periodo simulado, usa las pestañas <b>Cinco días</b> o <b>Hasta el colapso</b>.</p>
-  </section>
-
-  return <section className="flex flex-col gap-3 text-xs">
-    <div>
-      <p className="text-sm font-bold">{scenario === 'five' ? 'Simulación de cinco días' : 'Simulación hasta el colapso logístico'}</p>
-      <p className="mt-1 text-slate-600">{scenario === 'five' ? 'Simula exactamente 5 días desde la fecha que elijas y muestra el resumen al terminar. No afecta la operación real.' : 'Simula sin fecha de fin hasta que la flota ya no pueda entregar a tiempo; muestra cuándo y qué pedido lo causó. No afecta la operación real.'}</p>
-    </div>
-    <div className="flex flex-col gap-2">
-      <label className="flex flex-col gap-1 font-semibold text-slate-600">Fecha y hora de inicio<input type="datetime-local" value={start} onChange={e => setStart(e.target.value)} className="border border-slate-200 px-3 py-2 font-normal" /></label>
-      {scenario === 'five'
-        ? <p className="text-slate-500">Termina sola el <b>{start ? cincoDiasDespues(start) : '—'}</b> (5 días después).</p>
-        : <p className="text-slate-500">No tiene fecha de fin: sigue hasta el primer pedido que ya no pueda cumplir su plazo.</p>}
-      {coverage && (coverage.faltantes.length > 0 && scenario === 'five'
-        ? <p className="border border-red-200 bg-red-50 px-2 py-1.5 font-semibold text-red-700">Faltan datos de ventas para ese periodo: {coverage.faltantes.join(', ')}.</p>
-        : <p className="text-emerald-700">Datos de ventas: {coverage.archivos.join(' + ') || '—'} · {coverage.pedidos} pedidos en los primeros 5 días{coverage.lineasInvalidas > 0 ? ` · ${coverage.lineasInvalidas} líneas inválidas ignoradas` : ''}. {coverage.bloqueos ? `Bloqueos: ${coverage.bloqueos} (${(coverage.archivosBloqueos ?? []).join(' + ')}).` : 'Sin archivo de bloqueos: corre sin bloqueos planificados.'}</p>)}
-      {coverageError && <p className="font-semibold text-amber-700">{coverageError}</p>}
-      <label className="flex cursor-pointer items-center gap-2 self-start border border-slate-300 bg-white px-3 py-1.5 font-bold text-slate-700 hover:border-slate-400"><Upload className="size-3.5" />Subir archivo de ventas<input type="file" className="sr-only" onChange={e => { subir(e.target.files?.[0]); e.target.value = '' }} /></label>
-      <label className="flex cursor-pointer items-center gap-2 self-start border border-slate-300 bg-white px-3 py-1.5 font-bold text-slate-700 hover:border-slate-400"><Upload className="size-3.5" />Subir bloqueos (.zip o archivo)<input type="file" accept=".zip,.txt,.bloqueadas" className="sr-only" onChange={e => { subirB(e.target.files?.[0]); e.target.value = '' }} /></label>
-      {subida && <p role={subida.ok ? 'status' : 'alert'} className={subida.ok ? 'text-slate-600' : 'font-semibold text-red-700'}>{subida.texto}</p>}
-    </div>
-    {/* Acción principal de la pestaña: es el único botón lleno y grande del panel */}
-    <button onClick={start5} disabled={fiveBlocked} className={`flex w-full items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-white shadow ${fiveBlocked ? 'cursor-not-allowed bg-slate-300' : 'bg-blue-700 hover:bg-blue-800'}`}><Play className="size-4 fill-current" />{starting ? 'Iniciando en el servidor…' : scenario === 'five' ? 'Iniciar simulación de cinco días' : 'Iniciar simulación hasta el colapso'}</button>
-    {startError && <p role="alert" className="border border-red-200 bg-red-50 px-2 py-1.5 font-semibold text-red-700">{startError}</p>}
-  </section>
+function ScenarioSelect({scenario,onStart}:{scenario:Scenario;onStart:(tipo:SimType,start:string,duracion?:number)=>Promise<void>}){
+ const ctx=useV9(),[start,setStart]=useState('2026-09-08T08:00'),[duracion,setDuracion]=useState(45),[starting,setStarting]=useState(false),[error,setError]=useState(''),[coverage,setCoverage]=useState<Cobertura|null>(null),[revision,setRevision]=useState(0)
+ useEffect(()=>{const actualizar=()=>setRevision(n=>n+1);window.addEventListener('paqrap:datos-actualizados',actualizar);return()=>window.removeEventListener('paqrap:datos-actualizados',actualizar)},[])
+ useEffect(()=>{if(scenario==='day'||!start)return;let vivo=true;setCoverage(null);const t=setTimeout(()=>{validarCobertura(start).then(c=>{if(vivo){setCoverage(c);setError('')}}).catch(e=>{if(vivo)setError(mensajeError(e))})},300);return()=>{vivo=false;clearTimeout(t)}},[scenario,start,revision])
+ const iniciar=async()=>{setStarting(true);setError('');try{await onStart(scenario as SimType,start,duracion)}catch(e){setError(mensajeError(e))}finally{setStarting(false)}}
+ if(scenario==='day')return <section className="rounded-xl bg-blue-50 p-3 text-xs leading-relaxed text-slate-600"><h3 className="font-bold text-slate-900">Operación día a día</h3><p className="mt-1">Sigue los pedidos registrados en tiempo real. Usa Flota, Almacenes, Envíos e Incidencias para consultar y operar.</p></section>
+ const bloqueado=starting||!start||!coverage||(scenario==='five'&&coverage.faltantes.length>0)||duracion<1||duracion>600
+ return <section className="space-y-4 text-xs"><div><h3 className="text-base font-bold">{scenario==='five'?'Simulación de cinco días':'Hasta el colapso'}</h3><p className="mt-1 leading-relaxed text-slate-500">{scenario==='five'?'El servidor consume el periodo elegido y conserva el reporte final.':'Finaliza al producirse un colapso operativo; la falta de datos se informa como un motivo distinto.'}</p></div>
+ <label className="block font-semibold">Fecha y hora de inicio<input type="datetime-local" step="60" className="mt-1 block w-full rounded-xl border p-2.5 font-normal" value={start} onChange={e=>setStart(e.target.value)}/></label>
+ <label className="block font-semibold">Duración real de referencia (minutos)<input aria-label="Duración real de referencia" type="number" min="1" max="600" value={duracion} onChange={e=>setDuracion(Number(e.target.value))} className="mt-1 block w-full rounded-xl border p-2.5 font-normal"/></label>
+ <p className="text-slate-500">{scenario==='five'?`Fin del periodo: ${start?cincoDiasDespues(start):'—'}`:'La duración es una referencia de velocidad; el colapso no tiene fecha de fin predefinida.'}</p>
+ <div className={`rounded-xl border p-3 leading-relaxed ${coverage?.faltantes.length?'border-amber-200 bg-amber-50 text-amber-900':'border-slate-200 bg-slate-50 text-slate-600'}`}><h4 className="font-bold">Cobertura de datos</h4>{!coverage?<p>Comprobando archivos del periodo…</p>:<><p>{coverage.archivos.join(' + ')||'Sin archivos de ventas'}</p><p>{coverage.pedidos.toLocaleString('es-PE')} pedidos en los primeros cinco días · {coverage.lineasInvalidas} líneas inválidas</p>{coverage.faltantes.length>0&&<p className="mt-1 font-semibold">Faltan: {coverage.faltantes.join(', ')}</p>}<p>Bloqueos planificados: {coverage.bloqueos??0}</p></>}<button className="mt-2 font-semibold text-blue-700 underline" onClick={()=>ctx.setPanelActivo('datos')}>Gestionar datos de entrada</button><p className="mt-1 text-[11px]">La carga se realiza en su propio panel, antes de iniciar. Puedes seleccionar varios archivos mensuales o un ZIP.</p></div>
+ <button onClick={()=>void iniciar()} disabled={bloqueado} className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-3 font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300"><Play className="size-4"/>{starting?'Iniciando…':scenario==='five'?'Iniciar simulación de cinco días':'Iniciar simulación hasta el colapso'}</button><p role="alert" className="text-red-700">{error}</p></section>
 }
 
 // Resumen final de una simulación. Con la simulación del back-end muestra sus conteos, lo realmente recorrido y,
 // en el colapso, el instante y el pedido causante; sin ella, los valores de ejemplo del prototipo.
-function CollapseResults({ variant = 'collapse', onLocate, sim, segReal = 0, hora = horaSimulada }: { variant?: 'five' | 'collapse' | 'day'; onLocate?: (codigo: string) => void; sim?: VistaSimulacion | null; segReal?: number; hora?: (h: number) => string }) {
-  const c = sim?.pedidos
-  const ac = sim?.acumulado ?? null
-  const col = sim?.colapso ?? null
-  const soles = (n: number) => `S/ ${Math.round(n).toLocaleString('es-PE')}`
-  const km = (n: number) => `${Math.round(n).toLocaleString('es-PE')} km`
-  const causante = col?.pedido?.codigo ?? (sim ? null : 'PED-137')
-  // Colapso: el instante y el pedido que ya no pudo cumplir su plazo (LE071)
-  const cabecera: [string, string][] = variant === 'collapse'
-    ? sim
-      ? col
-        ? [['Instante del colapso', fechaHora(col.fecha)], ['Pedido causante', col.pedido ? `${col.pedido.codigo} · (${col.pedido.posX},${col.pedido.posY})` : '—'], ['Plazo comprometido', col.pedido ? hora(col.pedido.fechaLimiteH) : '—'], ['Duración real de la simulación', duracion(segReal)]]
-        : [['Inicio', fechaHora(sim.fechaInicio)], ['Fin de los datos', sim.fechaFin ? fechaHora(sim.fechaFin) : '—'], ['Resultado', 'Sin colapso: se acabaron los datos de ventas'], ['Duración real de la simulación', duracion(segReal)]]
-      : [['Instante del colapso', '11/09/2026 · 16:42'], ['Pedido causante', 'PED-137 · (48,34)'], ['Plazo comprometido', '11/09/2026 · 19:10'], ['Estado del pedido', 'No entregable dentro del plazo']]
-    : sim && c
-      ? [['Inicio del periodo', fechaHora(sim.fechaInicio)], ['Fin del periodo', sim.fechaFin ? fechaHora(sim.fechaFin) : '—'], ['Duración real de la simulación', duracion(segReal)], ['Pedidos del periodo', String(c.incorporados)]]
-      : [['Inicio del periodo', '08/09/2026 · 08:00'], ['Fin del periodo', '13/09/2026 · 08:00'], ['Pedidos del periodo', '211'], ['Duración real de la simulación', '00:42:18']]
-  const indicadores: [string, string][] = sim && c
-    ? [['Entregados dentro del plazo', `${c.entregadosATiempo} · ${porcentaje(c.entregadosATiempo, c.incorporados)}`], ['Entregados fuera del plazo', `${c.entregados - c.entregadosATiempo} · ${porcentaje(c.entregados - c.entregadosATiempo, c.incorporados)}`], ['No entregados', `${c.noEntregados} · ${porcentaje(c.noEntregados, c.incorporados)}`], ['Pendientes o en ruta al cierre', `${c.abiertos} · ${porcentaje(c.abiertos, c.incorporados)}`],
-       ...(ac ? [['Distancia total recorrida', km(ac.distanciaKm)], ['Costo operativo total', soles(ac.costo)]] as [string, string][] : [])]
-    : [['Entregados dentro del plazo', '184 · 87%'], ['Entregados fuera del plazo', '16 · 8%'], ['Pendientes', '8 · 4%'], ['En ruta', '3 · 1%'], ['Distancia total recorrida', '4 680 km'], ['Costo operativo total', 'S/ 18 930']]
-  const desglose: [string, string][] = sim
-    ? ac ? (Object.keys(ETIQUETA_TIPO) as TipoVehiculo[]).map(t => { const d = ac.porTipo[t]; return [`${ETIQUETA_TIPO[t]}s`, d ? `${km(d.distanciaKm)} · ${soles(d.costo)} · ${d.entregas} entregas` : '—'] }) : []
-    : [['Autos', '2 410 km · S/ 9 840'], ['Motos', '1 520 km · S/ 5 920'], ['Bicicletas', '750 km · S/ 3 170']]
-  const title = variant === 'five' ? 'Resumen final · Simulación 5 días' : variant === 'day' ? 'Corte del día · Operación día a día (sin estado final)' : sim && !col ? 'Resumen final · Hasta el colapso (sin colapso)' : 'Resumen final · Colapso logístico'
-  const rojo = variant === 'collapse' && (!sim || !!col)
-  return <section className={`border bg-white p-4 shadow-sm ${rojo ? 'border-red-200' : 'border-slate-200'}`}>
-    <div className={`flex flex-wrap items-center justify-between gap-2 border-b pb-3 ${rojo ? 'border-red-100' : 'border-slate-100'}`}>
-      <div><p className={`text-[10px] font-bold uppercase tracking-widest ${rojo ? 'text-red-700' : 'text-blue-700'}`}>Resultados finales · cantidad y % de cumplimiento</p><h3 className="mt-1 text-base font-bold">{title}</h3></div>
-      <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${rojo ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700'}`}>{variant === 'day' ? 'Corte operativo' : 'Estado final'}</span>
-    </div>
-    <div className="mt-4 grid gap-4">
-      <div className="grid grid-cols-2 gap-2">{cabecera.map(([label, value]) => <div key={label} className="border border-slate-100 bg-slate-50 px-3 py-2"><p className="text-[10px] text-slate-500">{label}</p><p className="mt-0.5 text-sm font-bold">{value}</p>{label === 'Pedido causante' && onLocate && causante && <button onClick={() => onLocate(causante)} className="mt-2 border border-red-300 bg-white px-2.5 py-1.5 text-xs font-bold text-red-700">Localizar en mapa</button>}</div>)}</div>
-      <div>
-        <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">Indicadores acumulados</p>
-        <div className="grid grid-cols-2 gap-2">{indicadores.map(([label, value]) => <div key={label} className="border border-slate-100 px-3 py-2"><p className="text-[10px] leading-tight text-slate-500">{label}</p><p className="mt-1 text-base font-bold">{value}</p></div>)}</div>
-        {desglose.length > 0 ? <>
-          <p className="mb-2 mt-4 text-[10px] font-bold uppercase tracking-wider text-slate-500">Desglose por tipo de vehículo</p>
-          <div className="grid gap-2">{desglose.map(([label, value]) => <div key={label} className="flex items-center justify-between gap-2 border border-slate-100 px-3 py-2"><p className="text-[11px] text-slate-500">{label}</p><p className="text-sm font-bold">{value}</p></div>)}</div>
-        </> : <p className="mt-4 text-[11px] text-slate-500">El back-end no informó la distancia ni el costo recorridos.</p>}
-      </div>
-    </div>
-  </section>
+function CollapseResults({variant='collapse',onLocate,sim,segReal=0,hora=horaSimulada}:{variant?:'five'|'collapse'|'day';onLocate?:(codigo:string)=>void;sim?:VistaSimulacion|null;segReal?:number;hora?:(h:number)=>string}){
+ const ctx=useV9()
+ if(!sim)return <section className="rounded-xl border p-4 text-xs text-slate-500">No hay un resultado del servidor para mostrar.</section>
+ const c=sim.pedidos,ac=sim.acumulado,col=sim.colapso
+ const titulo=variant==='five'?'Resumen del periodo':variant==='day'?'Corte de operación':col?'Colapso operativo':'Finalización sin colapso'
+ const indicadores=[['Pedidos incorporados',c.incorporados],['Entregados a tiempo',c.entregadosATiempo],['Entregados fuera de plazo',Math.max(0,c.entregados-c.entregadosATiempo)],['No entregados',c.noEntregados],['Pendientes al corte',c.abiertos],['Recorrido real',ac?ac.distanciaKm.toFixed(1)+' km':'No disponible'],['Costo real',ac?'S/ '+ac.costo.toFixed(2):'No disponible']]
+ return <section className="space-y-3 text-xs"><h3 className="text-base font-bold">{titulo}</h3><div className="rounded-xl border bg-slate-50 p-3 leading-relaxed"><p>Inicio: {fechaHora(sim.fechaInicio)}</p><p>Corte final: {fechaHora(sim.fechaSimulada)}</p><p>Tiempo real ejecutado: {duracion(segReal)}</p><p>Estado: {estadoEnEspanol(sim.simulacion.estado)}</p>{sim.cierre&&<p className="mt-2 font-semibold">{estadoEnEspanol(sim.cierre.motivo)}: {sim.cierre.detalle}</p>}{sim.simulacion.ultimoError&&<p className="mt-2 text-red-700">{sim.simulacion.ultimoError}</p>}</div><div className="grid grid-cols-2 gap-2">{indicadores.map(([k,v])=><div className="rounded-xl border p-3" key={String(k)}><p className="text-slate-500">{k}</p><b className="mt-1 block text-base">{v}</b></div>)}</div>{col?.pedido&&<button onClick={()=>onLocate?.(col.pedido!.codigo)} className="rounded-xl border border-red-200 bg-red-50 p-3 text-left text-red-800">Pedido causante: {col.pedido.codigo} · ({col.pedido.posX},{col.pedido.posY}) · plazo {hora(col.pedido.fechaLimiteH)}</button>}<button className="w-full rounded-xl bg-blue-700 px-3 py-3 font-bold text-white" onClick={()=>ctx.setPanelActivo('reportes')}>Abrir reporte legible y última planificación estable</button></section>
 }
 
 function Operator({ scenario, setScenario, state, setState, replanned, setReplanned, sim, setSim, mapa, escenarioId, onCambio, onUmbrales, hora, segReal, unidadSeleccionada, onUnidad, buscado, setBuscado, warehouse, setWarehouse, historialCompleto, recuperarDia, generaciones, invalidarSim, mapaActual }: { mapaActual: boolean; generaciones: ReturnType<typeof crearGeneraciones>; invalidarSim: () => void; recuperarDia: () => void; mapa: MapaDatos | null; escenarioId: number | null; onCambio: () => void; onUmbrales: (u: { pedido: Umbrales; stock: Umbrales }) => void; hora: (h: number) => string; segReal: number; scenario: Scenario; setScenario: (s: Scenario) => void; state: ExecState; setState: (s: ExecState) => void; replanned: boolean; setReplanned: (r: boolean) => void; sim: VistaSimulacion | null; setSim: (s: VistaSimulacion | null) => void; unidadSeleccionada: number | null; onUnidad: (id: number) => void; buscado: string | null; setBuscado: (codigo: string | null) => void; warehouse: string | null; setWarehouse: (nombre: string | null) => void; historialCompleto: boolean }) {
@@ -433,7 +338,8 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
   const [paramsMsg, setParamsMsg] = useState('')
   const [highlightOrderId, setHighlightOrderId] = useState<string | null>(null)
   // En pantallas pequeñas el panel empieza recogido para no tapar el mapa
-  const [panel, setPanel] = useState(() => typeof window === 'undefined' || window.innerWidth >= 768)
+  const v9 = useV9()
+  const [panel, setPanel] = useState(false)
   const simActive = scenario !== 'day' && (state === 'running' || state === 'incident')
   const simFinished = scenario !== 'day' && (state === 'complete' || state === 'collapse')
   // Momento de la simulación de cinco días que se está viendo (T0–T3), derivado del estado
@@ -441,7 +347,7 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
   // Instante vigente que el sistema asigna a una avería, coherente con el reloj del encabezado
   // Con una simulación elegida pero sin iniciar, la avería corresponde a la operación en tiempo real
   const onDay = scenario === 'day' || state === 'idle'
-  const faultTime = onDay ? (state === 'incident' || replanned ? '08/09/2026 · 10:20:15' : '08/09/2026 · 08:35:20') : scenario === 'five' ? (state === 'incident' || replanned ? '11/09/2026 · 10:20:15' : '10/09/2026 · 14:35:20') : '10/09/2026 · 09:12:40'
+  const faultTime = mapa ? hora(mapa.relojH) : 'No disponible'
   const [simMsg, setSimMsg] = useState('')
   const [simBusy, setSimBusy] = useState(false)
   const ocupada = useRef(false)
@@ -453,9 +359,9 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
     ocupado: ocupado => { setSimBusy(ocupado); if (ocupado) setSimMsg('') },
   })
   const cambiarEscenario = (s: Scenario) => { invalidarSim(); setReplanned(false); setHighlightOrderId(null); setScenario(s); setState(s === 'day' ? 'running' : 'idle') }
-  const startSim = async (tipo: SimType, start: string) => {
+  const startSim = async (tipo: SimType, start: string, duracion = 45) => {
     invalidarSim(); const version = generaciones.actual()
-    await respuestaVigente(tipo === 'five' ? iniciarCincoDias(start) : iniciarColapso(start), generaciones, version, v => { setSim(v); setReplanned(false); setState('running') })
+    await respuestaVigente(tipo === 'five' ? iniciarCincoDias(start, duracion) : iniciarColapso(start, duracion), generaciones, version, v => { setSim(v); setReplanned(false); setState('running');setPanel(false) })
   }
   // Al colapsar se resalta el pedido causante en el mapa
   const causante = sim?.colapso?.pedido?.codigo
@@ -468,7 +374,7 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
     catch (e) { if (generaciones.vigente(version)) { invalidarSim(); setSimMsg(mensajeError(e)) } }
     finally { ocupada.current = false; setSimBusy(false) }
   }
-  const openWarehouse = (w: string) => { setWarehouse(w); setPanel(true); setTimeout(() => document.getElementById('panel-almacen')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50) }
+  const openWarehouse = (w: string) => { setWarehouse(w);v9.setPanelActivo('almacenes') }
   const applyParams = () => {
     const nums = [orderLight.verde, orderLight.rojo, stockLight.verde, stockLight.rojo].map(Number)
     if (nums.some(n => !Number.isFinite(n) || n < 0)) return setParamsMsg('Revisa los valores: deben ser números positivos.')
@@ -510,7 +416,7 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
           <p className="mt-4 font-bold text-slate-700">Semáforo de pedidos · margen = fecha/hora límite − ETA (horas)</p>
           <div className="mt-1 grid grid-cols-2 gap-2"><label className="font-semibold text-emerald-700">Verde si margen ≥<input type="number" value={orderLight.verde} onChange={e => setOrderLight({ ...orderLight, verde: e.target.value })} className={field} /></label><label className="font-semibold text-red-700">Rojo si margen &lt;<input type="number" value={orderLight.rojo} onChange={e => setOrderLight({ ...orderLight, rojo: e.target.value })} className={field} /></label></div>
           <p className="mt-1 text-slate-500"><b className="text-amber-700">Ámbar</b> entre {orderLight.rojo || '?'} h y {orderLight.verde || '?'} h. Más margen es más seguro.</p>
-          <p className="mt-4 font-bold text-slate-700">Semáforo de stock · almacenes intermedios (% disponible)</p>
+          <p className="mt-4 font-bold text-slate-700">Semáforo de existencias · almacenes intermedios (% disponible)</p>
           <div className="mt-1 grid grid-cols-2 gap-2"><label className="font-semibold text-emerald-700">Verde si stock ≥<input type="number" value={stockLight.verde} onChange={e => setStockLight({ ...stockLight, verde: e.target.value })} className={field} /></label><label className="font-semibold text-red-700">Rojo si stock &lt;<input type="number" value={stockLight.rojo} onChange={e => setStockLight({ ...stockLight, rojo: e.target.value })} className={field} /></label></div>
           <p className="mt-1 text-slate-500"><b className="text-amber-700">Ámbar</b> entre {stockLight.rojo || '?'} % y {stockLight.verde || '?'} %. El almacén central es ilimitado y no usa semáforo.</p>
           <div className="mt-4 flex flex-wrap items-center gap-3"><button onClick={applyParams} className="bg-blue-700 px-4 py-2 font-bold text-white">Aplicar cambios</button>{paramsMsg && <span className={paramsMsg.startsWith('Cambios') ? 'text-emerald-700' : 'font-semibold text-red-700'}>{paramsMsg}</span>}</div>
@@ -547,7 +453,7 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
         <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
           {!simFinished && <button onClick={() => setPerformance(!performance)} aria-expanded={performance} className={`flex items-center gap-1 border px-2.5 py-1.5 font-bold ${performance ? 'border-blue-700 bg-blue-50 text-blue-800' : 'border-slate-200 bg-white'}`}>Rendimiento <ChevronDown className={`size-3.5 ${performance ? 'rotate-180' : ''}`} /></button>}
         </div>
-        <section aria-label="Almacenes" className="border border-slate-200 p-3 text-xs"><h3 className="font-bold">Almacenes</h3>{!mapa ? <p className="mt-1 text-slate-500">Datos no disponibles.</p> : mapa.almacenes.length === 0 ? <p className="mt-1 text-slate-500">Sin almacenes informados.</p> : <ul>{mapa.almacenes.map(a => { const nombre = NOMBRE_ALMACEN[a.codigo] ?? a.codigo; return <li key={a.id} className="border-t py-2"><button onClick={() => openWarehouse(nombre)} className="font-bold text-blue-700 underline">{nombre}</button><span className="ml-2">{a.central ? 'Stock ilimitado' : a.pct == null ? 'Stock no disponible' : <span className={TEXTO_SEMAFORO[tonoStock(a.pct, u.stock)]}>{a.stock} / {a.capacidad} · {a.pct}% · {tonoStock(a.pct, u.stock)}</span>}</span></li> })}</ul>}</section>
+        <section className="rounded-xl border border-slate-200 p-3 text-xs"><h3 className="font-bold">Almacenes y movimientos</h3><p className="mt-1 text-slate-500">Consulta existencias, ordena llegadas o salidas y filtra la lista junto al mapa.</p><button className="mt-2 rounded-lg border px-3 py-2 font-semibold text-blue-700" onClick={()=>v9.setPanelActivo('almacenes')}>Abrir lista de almacenes</button></section>
         {performance && !simFinished && (rend
           ? <div className="border border-slate-200 bg-white p-3 text-xs">
               <p className="text-slate-500">Cumplimiento · {rend.total} pedidos del escenario</p>
@@ -561,7 +467,7 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
           {(() => {
             // Con datos del back-end: stock y unidades reales; sin ellos, los valores de ejemplo del prototipo
             const a = mapa?.almacenes.find(x => (NOMBRE_ALMACEN[x.codigo] ?? x.codigo) === warehouse)
-            const stock = (pct: number, texto: string) => <>{texto} · <span className={`font-bold ${TEXTO_SEMAFORO[tonoStock(pct, u.stock)]}`}>● {{ verde: 'verde', ambar: 'ámbar', rojo: 'rojo' }[tonoStock(pct, u.stock)]}</span></>
+            const stock = (pct: number, texto: string) => <>{texto} · <span className={`font-bold ${TEXTO_SEMAFORO[tonoStock(pct, u.stock)]}`}>● {{ 'vacío': 'vacío', verde: 'verde', ambar: 'ámbar', rojo: 'rojo' }[tonoStock(pct, u.stock)]}</span></>
             const filas: [string, ReactNode][] = a
               ? [['Stock', a.central ? 'Ilimitado (no usa semáforo)' : a.pct == null ? 'No disponible' : stock(a.pct, `${a.stock?.toLocaleString('es-PE')} de ${a.capacidad?.toLocaleString('es-PE')} u · ${a.pct} %`)],
                  ['Unidades en base', String(a.vehiculosEnBase)], ['Unidades en ruta', String(a.unidadesFuera)], ['Pedidos por entregar', String(a.pedidosPorEntregar)], ['Ubicación', `(${a.x}, ${a.y})`]]
@@ -578,7 +484,7 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
 
 function Viewer({ state, setState, scenario, replanned, sim, mapa, hora, segReal, estadoUrl, esDia = false, unidadSeleccionada, onUnidad, buscado, setBuscado, warehouse, setWarehouse }: { estadoUrl?: string; esDia?: boolean; state: ExecState; setState: (s: ExecState) => void; scenario: Scenario; replanned: boolean; sim: VistaSimulacion | null; mapa: MapaDatos | null; hora: (h: number) => string; segReal: number; unidadSeleccionada: number | null; onUnidad: (id: number) => void; buscado: string | null; setBuscado: (codigo: string | null) => void; warehouse: string | null; setWarehouse: (nombre: string | null) => void }) {
   const [kpisAbiertos, setKpisAbiertos] = useState(false)
-  const [estadoAbierto, setEstadoAbierto] = useState(true)
+  const [estadoAbierto, setEstadoAbierto] = useState(false)
   useEffect(() => { if (window.innerWidth < 768) setEstadoAbierto(false) }, [])
   const causante = sim?.colapso?.pedido?.codigo
   useEffect(() => { if (causante) setBuscado(causante) }, [causante])
@@ -598,7 +504,7 @@ function Viewer({ state, setState, scenario, replanned, sim, mapa, hora, segReal
     sim.acumulado ? ['Recorrido · costo', `${Math.round(sim.acumulado.distanciaKm).toLocaleString('es-PE')} km · S/ ${Math.round(sim.acumulado.costo).toLocaleString('es-PE')}`] : ['Costo del plan vigente', mapa?.resumen.costoPlan != null ? `S/ ${Math.round(mapa.resumen.costoPlan).toLocaleString('es-PE')}` : '—']] : mapa ? [[esDia ? 'Fecha y hora' : 'Hora simulada', esDia ? hora(mapa.relojH) : horaSimulada(mapa.relojH)], ['Pedidos abiertos', String(mapa.resumen.pedidosAbiertos)], ['Vehículos en ruta', String(mapa.resumen.vehiculosEnRuta)], ['Algoritmo del plan', mapa.resumen.algoritmo ?? 'sin plan'], ['Costo del plan vigente', mapa.resumen.costoPlan != null ? `S/ ${Math.round(mapa.resumen.costoPlan).toLocaleString('es-PE')}` : '—'], ['Distancia del plan', mapa.resumen.distanciaPlanKm != null ? `${Math.round(mapa.resumen.distanciaPlanKm)} km` : '—']] : final ? [['Entregados dentro de plazo', '184 · 87%'], ['Fuera de plazo', '16 · 8%'], ['Pendientes / en ruta', '11 · 5%'], ['Distancia total', '4 680 km'], ['Costo total', 'S/ 18 930'], ['Duración real', '42:18']] : [['Pedidos entregados', '94%'], ['Pendientes', '8'], ['En ruta', '18'], ['Distancia', '2 940 km']]
   return <div className="relative h-full">
     <MapaOperativo full replanned={replanned} state={shown} highlightOrderId={shown === 'collapse' && !mapa ? 'PED-137' : null} datos={mapa} buscado={buscado} onPedido={setBuscado} unidadSeleccionada={unidadSeleccionada} onUnidad={onUnidad} onWarehouse={setWarehouse} almacenMarcado={warehouse} />
-    {warehouse && <div className="absolute bottom-16 left-3 z-10 border border-blue-200 bg-white p-3 text-xs shadow"><div className="flex gap-4"><b>{warehouse}</b><button onClick={() => setWarehouse(null)} aria-label="Cerrar panel de almacén">Cerrar</button></div>{(() => { const a = mapa?.almacenes.find(x => (NOMBRE_ALMACEN[x.codigo] ?? x.codigo) === warehouse); return a ? <p className="mt-1">{a.central ? 'Stock ilimitado' : a.pct == null ? 'Stock no disponible' : `${a.stock} / ${a.capacidad} · ${a.pct}%`} · ({a.x}, {a.y})</p> : <p>Almacén no disponible.</p> })()}</div>}
+    {warehouse && <div className="absolute bottom-16 left-3 z-10 border border-blue-200 bg-white p-3 text-xs shadow"><div className="flex gap-4"><b>{warehouse}</b><button onClick={() => setWarehouse(null)} aria-label="Cerrar panel de almacén">Cerrar</button></div>{(() => { const a = mapa?.almacenes.find(x => (NOMBRE_ALMACEN[x.codigo] ?? x.codigo) === warehouse); return a ? <p className="mt-1">{a.central ? 'Existencias ilimitadas' : a.pct == null ? 'Existencias no disponibles' : `${a.stock} / ${a.capacidad} · ${a.pct}%`} · ({a.x}, {a.y})</p> : <p>Almacén no disponible.</p> })()}</div>}
 
     {/* Rastrear un pedido: el usuario de consulta busca por código y lo ve en el mapa */}
     <div className="absolute right-3 top-16 z-10 max-w-[calc(100%-1.5rem)] md:top-3"><BuscarPedido rastreo={mapa?.rastreo ?? []} buscado={buscado} setBuscado={setBuscado} hora={hora} onUnidad={onUnidad} /></div>
@@ -629,7 +535,7 @@ function Viewer({ state, setState, scenario, replanned, sim, mapa, hora, segReal
 }
 
 export default function Home() {
-  const [role, setRole] = useState<Role>('registrador')
+  const [role, setRole] = useState<Role>('operador')
   const [scenario, setScenario] = useState<Scenario>('day')
   const [state, setState] = useState<ExecState>('idle')
   const [replanned, setReplanned] = useState(false)
@@ -653,6 +559,8 @@ export default function Home() {
   const recuperacionDia = useRef<ReturnType<typeof crearRecuperacionDia> | null>(null)
   const recuperarDia = () => recuperacionDia.current?.recuperar()
   useEffect(() => {
+    const consulta=Number(new URLSearchParams(window.location.search).get('escenario'))
+    if(Number.isSafeInteger(consulta)&&consulta>0)return
     const controlador = crearRecuperacionDia(
       { actual: operacionActual, consultar: consultarSimulacion, convertir: operacionDesdeVista },
       { actual: valor => { setDia(valor); setErrorDia('') }, error: e => setErrorDia(mensajeError(e)),
@@ -663,7 +571,9 @@ export default function Home() {
     return () => { controlador.cerrar(); recuperacionDia.current = null }
   }, [])
   useEffect(() => {
-    const n = Number(new URLSearchParams(window.location.search).get('escenario'))
+    const parametros=new URLSearchParams(window.location.search)
+    if(parametros.get('vista')==='consulta')setRole('visualizador')
+    const n = Number(parametros.get('escenario'))
     if (Number.isInteger(n) && n > 0) { setEscenarioUrl(n); return }
     const version = generaciones.actual()
     respuestaVigente(listarSimulaciones(), generaciones, version,
@@ -681,9 +591,9 @@ export default function Home() {
   const almacenSeleccionado = seleccionAlmacen?.escenarioId === escenarioMapa ? seleccionAlmacen.nombre : null
   const seleccionarAlmacen = (nombre: string | null) => { if (nombre !== null) setSeleccionUnidad(null); setSeleccionAlmacen(nombre === null || escenarioMapa === null ? null : { escenarioId: escenarioMapa, nombre }) }
   useEffect(() => { setSeleccionUnidad(null); setSeleccionAlmacen(null); setBuscado(null) }, [escenarioMapa])
-  const esDia = escenarioMapa != null && escenarioMapa === dia?.escenarioId
   const consultandoUrl = simId == null && escenarioUrl != null
   const vistaSeleccionada = consultandoUrl && vistaUrl?.id === escenarioUrl ? vistaUrl.vista : null
+  const esDia = vistaSeleccionada?.simulacion.tipo === 'DIA_A_DIA' || (escenarioMapa != null && escenarioMapa === dia?.escenarioId)
   const estadoUrl = consultandoUrl ? etiquetaEstadoEscenario(vistaSeleccionada?.simulacion.estado ?? null) : undefined
   const mapaVivo = escenarioMapa != null && (simAlive || escenarioUrl != null || esDia)
   const operacion = useOperacion(escenarioMapa)
@@ -721,14 +631,14 @@ export default function Home() {
     const pedidos = [...historicos.filter(p => !abiertos.has(p.id)), ...m.pedidos]
     const datos = datosMapa({ escenarioId: m.escenarioId, versionEstado: m.versionEstado, relojH: m.relojH,
       horizonteH: null, ultimoPlanId: m.plan?.id ?? null, fisico: m.fisico, acumulado: m.acumulado },
-      m.aplicable ? m.plan : null, pedidos, m.incidencias)
+      m.plan, pedidos, m.incidencias,m.aplicable)
     if (m.aplicable && m.plan) datos.vehiculos = datos.vehiculos.map(v => {
       const ruta = m.plan?.rutas.find(r => r.vehiculoId === v.id && r.horaInicioH <= m.relojH && m.relojH < r.horaFinH)
       return { ...v, direccion: ruta ? direccionEn(ruta.trayectoria, m.relojH) : null }
     })
     if (operacion.detalle === 'actual' && operacion.unidades) {
       const detalles = new globalThis.Map(operacion.unidades.unidades.map(u => [u.id, u]))
-      datos.vehiculos = datos.vehiculos.map(v => { const detalle = detalles.get(v.id); return detalle ? { ...v, ocupacionPct: detalle.ocupacionPct, estado: detalle.estado } : v })
+      datos.vehiculos = datos.vehiculos.map(v => { const detalle = detalles.get(v.id); return detalle ? { ...v, estado: detalle.estado } : v })
       datos.resumen.vehiculosEnRuta = operacion.unidades.unidades.filter(u => u.estado === 'EN_RUTA' || u.estado === 'EN_SERVICIO').length
     }
     if (motorActivo) datos.vehiculos = datos.vehiculos.map(v => posicionesVisuales[v.id] ? { ...v, ...posicionesVisuales[v.id] } : v)
@@ -773,7 +683,7 @@ export default function Home() {
     return () => clearInterval(t)
   }, [simEstado, simId])
   // Horas del escenario: con simulación, como fecha de calendario; si no, como día y hora del reloj
-  const fechaBase = sim?.simulacion.fechaBase ?? (esDia ? dia?.fechaBase : undefined)
+  const fechaBase = sim?.simulacion.fechaBase ?? vistaSeleccionada?.simulacion.fechaBase ?? (esDia ? dia?.fechaBase : undefined)
   const hora = useMemo(() => fechaBase ? (h: number) => fechaDesdeBase(fechaBase, h) : horaSimulada, [fechaBase])
   // El registrador ingresa pedidos solo para la operación día a día (o el escenario abierto con ?escenario=N)
   const diaRegistro = escenarioUrl ?? dia?.escenarioId ?? null
@@ -793,19 +703,22 @@ export default function Home() {
     if (process.env.NODE_ENV !== 'production') console.info(`[PaqRap] vista=${role} · escenario=${scenarioLabels[scenario]} · estado=${stateLabels[effectiveState]}${replanned ? ' · plan actualizado' : ''}`)
   }, [role, scenario, effectiveState, replanned])
   // Operador y visualizador trabajan sobre el mapa a pantalla completa; el registrador es un formulario.
-  return <UmbralesCtx.Provider value={umbrales}><main className="flex h-dvh flex-col overflow-hidden bg-white font-sans text-slate-900">
-    <Header idUrl={consultandoUrl ? escenarioUrl : null} estadoUrl={estadoUrl} scenario={scenario} state={effectiveState} replanned={replanned} sim={sim} segReal={segReal} dia={dia} escenario={mapa && escenarioMapa != null ? { id: escenarioMapa, relojH: mapa.relojH, dia: esDia, fecha: hora(mapa.relojH) } : null} />
-    {!consultandoUrl && !sim && scenario === 'day' && (errorDia || (dia && dia.estadoMotor !== 'EJECUTANDO')) && <div role="status" className="border-b border-amber-200 bg-amber-50 px-5 py-2 text-xs text-amber-900">{errorDia ? <>{`Conexión interrumpida: ${errorDia}${dia ? ` · último estado conocido: ${dia.estadoMotor}${dia.ultimoError ? ` · ${dia.ultimoError}` : ''}` : ''}`} <button className="ml-2 border border-amber-400 bg-white px-2 py-1 font-bold" onClick={recuperarDia}>Reintentar</button></> : `Motor: ${dia?.estadoMotor}${dia?.ultimoError ? ` · ${dia.ultimoError}` : ''}`}</div>}
+  return <UmbralesCtx.Provider value={umbrales}><ContextoV9 almacenSeleccionado={operacion.mapa?.fisico?.almacenes.find(a => (NOMBRE_ALMACEN[a.codigo] ?? a.codigo) === almacenSeleccionado)?.codigo ?? null} mapa={operacion.mapa} unidades={operacion.detalle === 'actual' ? operacion.unidades : null}><main className="flex h-dvh flex-col overflow-hidden bg-white font-sans text-slate-900">
+    <Header idUrl={consultandoUrl ? escenarioUrl : null} estadoUrl={estadoUrl} scenario={scenario} state={effectiveState} replanned={replanned} sim={sim ?? vistaSeleccionada} segReal={sim?segReal:vistaSeleccionada?.simulacion.segundosEjecutados??dia?.segundosEjecutados??0} dia={dia} escenario={mapa && escenarioMapa != null ? { id: escenarioMapa, relojH: mapa.relojH, dia: esDia, fecha: hora(mapa.relojH) } : null} />
+    {!consultandoUrl && !sim && scenario === 'day' && (errorDia || (dia && dia.estadoMotor !== 'EJECUTANDO')) && <div role="status" className="border-b border-amber-200 bg-amber-50 px-5 py-2 text-xs text-amber-900">{errorDia ? <>{`Conexión interrumpida: ${errorDia}${dia ? ` · último estado conocido: ${dia.estadoMotor}${dia.ultimoError ? ` · ${dia.ultimoError}` : ''}` : ''}`} <button className="ml-2 border border-amber-400 bg-white px-2 py-1 font-bold" onClick={recuperarDia}>Reintentar</button></> : `Motor: ${estadoEnEspanol(dia?.estadoMotor)}${dia?.ultimoError ? ` · ${dia.ultimoError}` : ''}`}</div>}
     <Nav role={role} setRole={r => { invalidarSim(); setRole(r) }} />
+    {role !== 'registrador' && <HerramientasV9 esDia={sim ? sim.simulacion.tipo === 'DIA_A_DIA' : consultandoUrl ? vistaSeleccionada?.simulacion.tipo === 'DIA_A_DIA' : scenario === 'day'} sim={sim ?? vistaSeleccionada ?? null} segReal={sim ? segReal : vistaSeleccionada?.simulacion.segundosEjecutados ?? dia?.segundosEjecutados ?? 0} hora={hora} operador={role === 'operador'} />}
     {role === 'registrador'
       ? <div className="min-h-0 flex-1 overflow-y-auto bg-[#f3f5f6] p-5 md:p-7"><div className="mx-auto max-w-[1500px]"><Registrar escenarioId={diaRegistro} disponible={!errorDia && (!consultandoUrl || vistaSeleccionada?.simulacion.estado === 'EJECUTANDO')} rastreo={diaRegistro != null && diaRegistro === escenarioMapa && historialActual ? mapa?.rastreo ?? null : null} hora={horaRegistro} onRegistrado={refrescar} historialDesactualizado={estadoHistorial === 'desactualizado'} /></div></div>
       : <div className="relative min-h-0 flex-1">
           {mapaError && <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 shadow">Mapa sin actualizar: {mapaError} <button onClick={refrescar} className="ml-2 border border-amber-400 bg-white px-2 py-1">Reintentar</button></div>}
           {motorActivo && Object.keys(posicionesVisuales).length > 0 && <div role="status" className="absolute bottom-16 left-1/2 z-20 -translate-x-1/2 bg-white/95 px-2 py-1 text-xs text-slate-700 shadow">Movimiento visual entre lecturas confirmadas</div>}
           {role === 'operador' && <Operator mapaActual={operacion.conexion === 'actual'} generaciones={generaciones} invalidarSim={invalidarSim} recuperarDia={recuperarDia} onUmbrales={setUmbrales} mapa={mapa} escenarioId={mapaVivo ? escenarioMapa : null} onCambio={refrescar} hora={hora} segReal={segReal} scenario={scenario} setScenario={setScenario} state={scenario === 'day' ? effectiveState : state} setState={setState} replanned={replanned} setReplanned={setReplanned} sim={sim} setSim={setSim} unidadSeleccionada={unidadSeleccionada} onUnidad={seleccionarUnidad} buscado={buscado} setBuscado={setBuscado} warehouse={almacenSeleccionado} setWarehouse={seleccionarAlmacen} historialCompleto={historialActual !== null && estadoHistorial === 'actual'} />}
-          {role === 'visualizador' && <Viewer estadoUrl={estadoUrl} esDia={esDia} sim={sim} mapa={mapa} hora={hora} segReal={segReal} scenario={scenario} state={effectiveState} setState={setState} replanned={replanned} unidadSeleccionada={unidadSeleccionada} onUnidad={seleccionarUnidad} buscado={buscado} setBuscado={setBuscado} warehouse={almacenSeleccionado} setWarehouse={seleccionarAlmacen} />}
+          {role === 'visualizador' && <Viewer estadoUrl={estadoUrl} esDia={esDia} sim={sim ?? vistaSeleccionada} mapa={mapa} hora={hora} segReal={segReal} scenario={scenario} state={effectiveState} setState={setState} replanned={replanned} unidadSeleccionada={unidadSeleccionada} onUnidad={seleccionarUnidad} buscado={buscado} setBuscado={setBuscado} warehouse={almacenSeleccionado} setWarehouse={seleccionarAlmacen} />}
           <PanelFlota key={`flota-${escenarioMapa ?? 'sin-escenario'}`} unidades={operacion.unidades?.unidades ?? null} detalle={operacion.detalle} hora={hora} seleccion={unidadSeleccionada} onSeleccion={seleccionarUnidad} incidencias={operacion.mapa?.incidencias ?? []} onPedido={setBuscado} />
-          <PanelEnvios key={`envios-${escenarioMapa ?? 'sin-escenario'}`} mapa={operacion.mapa} unidades={operacion.detalle === 'actual' ? operacion.unidades : null} historial={historialActual} estadoHistorial={estadoHistorial} estadoMapa={operacion.conexion} hora={hora} onPedido={setBuscado} onUnidad={seleccionarUnidad} />
+          <PanelAlmacenesV9 hora={hora} onAlmacen={codigo => seleccionarAlmacen(NOMBRE_ALMACEN[codigo] ?? codigo)} onUnidad={seleccionarUnidad} onPedido={setBuscado}/><PanelDatosV9/><PanelIndicadoresV9 hora={hora}/><PanelReportesV9 hora={hora}/>
+          <PanelIncidenciasV9 hora={hora} onUnidad={seleccionarUnidad} />
+          <PanelEnvios onAlmacen={codigo => seleccionarAlmacen(NOMBRE_ALMACEN[codigo] ?? codigo)} key={`envios-${escenarioMapa ?? 'sin-escenario'}`} mapa={operacion.mapa} unidades={operacion.detalle === 'actual' ? operacion.unidades : null} historial={historialActual} estadoHistorial={estadoHistorial} estadoMapa={operacion.conexion} hora={hora} onPedido={setBuscado} onUnidad={seleccionarUnidad} />
         </div>}
-  </main></UmbralesCtx.Provider>
+  </main></ContextoV9></UmbralesCtx.Provider>
 }

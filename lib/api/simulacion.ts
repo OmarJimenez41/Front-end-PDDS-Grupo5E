@@ -37,6 +37,8 @@ export interface Colapso {
 }
 
 export interface VistaSimulacion {
+  tiempos?:{saConfiguradaH:number;scConfiguradoH:number;taMs:EstadisticaTiempo;saH:EstadisticaTiempo;scH:EstadisticaTiempo;planificacionMs:EstadisticaTiempo}|null
+  cierre?:{motivo:string;detalle:string}|null
   simulacion: {
     escenarioId: number
     /** Fecha cuyo 00:00 es la hora 0 del escenario, 'aaaa-mm-dd'. */
@@ -74,9 +76,12 @@ export interface VistaSimulacion {
   /** null mientras no colapse; solo en la simulación hasta el colapso. */
   colapso?: Colapso | null
 }
+export interface EstadisticaTiempo {muestras:number;ultimo:number;promedio:number;minimo:number;maximo:number}
 
 /** Operación día a día: escenario en tiempo real, siempre activo; el back-end lo crea la primera vez. */
 export interface OperacionActual {
+  segundosEjecutados?: number
+  ahoraServidor?: string
   escenarioId: number
   fechaBase: string
   relojH: number
@@ -93,7 +98,8 @@ export function operacionDesdeVista(v: VistaSimulacion): OperacionActual {
   const s = v.simulacion
   return { escenarioId: s.escenarioId, fechaBase: s.fechaBase, relojH: s.relojH, fechaHora: v.fechaSimulada,
     estado: s.estado === 'EJECUTANDO' ? 'EN_EJECUCION' : s.estado === 'PAUSADA' ? 'PAUSADO' : 'FINALIZADO',
-    estadoMotor: s.estado, inicioReal: s.inicioReal ?? null, ultimoError: s.ultimoError, pedidos: v.pedidos }
+    estadoMotor: s.estado, inicioReal: s.inicioReal ?? null, ultimoError: s.ultimoError, pedidos: v.pedidos,
+    segundosEjecutados: s.segundosEjecutados, ahoraServidor: (v as VistaSimulacion & {ahoraServidor?:string}).ahoraServidor }
 }
 
 export type TipoVehiculo = 'AUTO' | 'MOTO' | 'BICICLETA'
@@ -147,13 +153,16 @@ export interface PedidoEscenario {
 }
 
 export async function pedir<T>(ruta: string, init?: RequestInit): Promise<T> {
-  const respuesta = await fetch(`${API_URL}${ruta}`, { cache: 'no-store', ...init })
-  if (!respuesta.ok) {
-    const cuerpo = await respuesta.json().catch(() => null)
-    throw new Error(cuerpo?.mensaje ?? `Error ${respuesta.status} en ${ruta}`)
-  }
-  if (respuesta.status === 204) return undefined as T
-  return respuesta.json() as Promise<T>
+  const cancelacion=new AbortController(),origen=init?.signal
+  const cancelar=()=>cancelacion.abort(origen?.reason)
+  if(origen?.aborted)cancelar();else origen?.addEventListener('abort',cancelar,{once:true})
+  const limite=setTimeout(()=>cancelacion.abort(new Error('La consulta tardó demasiado. Comprueba la conexión; la vista volverá a intentarlo.')),init?.body instanceof FormData?120000:20000)
+  try{
+    const respuesta = await fetch(`${API_URL}${ruta}`, { cache: 'no-store', ...init,signal:cancelacion.signal })
+    if (!respuesta.ok) {const cuerpo=await respuesta.json().catch(()=>null);throw new Error(cuerpo?.mensaje??`Error ${respuesta.status} en ${ruta}`)}
+    if(respuesta.status===204)return undefined as T
+    return await respuesta.json() as T
+  }finally{clearTimeout(limite);origen?.removeEventListener('abort',cancelar)}
 }
 
 /** Fecha local sin zona, como la espera el back-end: 2026-01-29T08:00:00. */
@@ -172,24 +181,26 @@ export function validarCobertura(fechaHoraInicio: string) {
 }
 
 /** Minutos reales que toman los cinco días simulados; sin este valor el back-end usa su ritmo por defecto (45 min). */
-export const DURACION_REAL_MIN = 4
+export const DURACION_REAL_MIN = 45
 
 /** Inicia los cinco días; responde 409 con la causa si faltan archivos de ventas. */
 export function iniciarCincoDias(fechaHoraInicio: string, duracionRealMin = DURACION_REAL_MIN) {
+  const comienzo=performance.now()
   return pedir<VistaSimulacion>('/api/simulaciones/cinco-dias', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ fechaHoraInicio: sinZona(fechaHoraInicio), duracionRealMin }),
-  })
+  }).then(async v=>{const {inicioMedido}=await import('../operacion/latencia');inicioMedido(v.simulacion.escenarioId,comienzo);return v})
 }
 
 /** Inicia la simulación hasta el colapso; `duracionRealMin` fija el ritmo (lo que tardarían cinco días simulados). */
 export function iniciarColapso(fechaHoraInicio: string, duracionRealMin = DURACION_REAL_MIN) {
+  const comienzo=performance.now()
   return pedir<VistaSimulacion>('/api/simulaciones/colapso', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ fechaHoraInicio: sinZona(fechaHoraInicio), duracionRealMin }),
-  })
+  }).then(async v=>{const {inicioMedido}=await import('../operacion/latencia');inicioMedido(v.simulacion.escenarioId,comienzo);return v})
 }
 
 export const operacionActual = () => pedir<OperacionActual>('/api/operacion/actual')

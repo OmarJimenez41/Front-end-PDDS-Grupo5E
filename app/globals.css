@@ -2,6 +2,54 @@
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 
+.panel-trabajo-v9 label { color:#475569; font-size:11px; font-weight:600; }
+.panel-trabajo-v9 input:not([type=file]), .panel-trabajo-v9 select { min-height:38px; border:1px solid #e2e8f0; border-radius:10px; padding:8px 10px; background:#f8fafc; color:#0f172a; font-size:12px; }
+.panel-trabajo-v9 button { transition:background-color 120ms,border-color 120ms; }
+.panel-trabajo-v9 button:focus-visible, .panel-trabajo-v9 input:focus-visible, .panel-trabajo-v9 select:focus-visible, .panel-trabajo-v9 summary:focus-visible { outline:2px solid #2563eb; outline-offset:2px; }
+.panel-trabajo-v9 p { line-height:1.6; }
+.panel-trabajo-v9 button:disabled { opacity:.5; cursor:not-allowed; }
+.panel-trabajo-v9 details summary { padding:6px 0; }
+.panel-trabajo-v9 h3 { color:#0f172a; }
+.panel-trabajo-v9 section[aria-label='Flota operativa']>div:first-child, .panel-trabajo-v9 section[aria-label='Envíos y almacenes']>div:first-child { position:sticky; top:-16px; z-index:3; background:white; padding:12px 0; border-bottom:1px solid #e2e8f0; }
+@media(max-width:640px){.panel-trabajo-v9{position:fixed!important;top:112px!important;bottom:12px!important;right:8px!important;z-index:60!important;max-width:calc(100% - 16px)!important}.panel-trabajo-v9 section{max-width:calc(100vw - 16px)!important}}
+
+.herramientas-v9 #filtros-v9 label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+}
+.herramientas-v9 #filtros-v9 select,
+.herramientas-v9 #filtros-v9 input {
+  min-height: 38px;
+  margin-top: 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  padding: 7px 10px;
+  background: #f8fafc;
+  color: #0f172a;
+}
+.herramientas-v9 #filtros-v9 select:focus-visible,
+.herramientas-v9 #filtros-v9 input:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+.herramientas-v9 #filtros-v9 h3 {
+  margin-top: 16px;
+  margin-bottom: 8px;
+  color: #0f172a;
+}
+.herramientas-v9 #filtros-v9 p {
+  line-height: 1.6;
+}
+.herramientas-v9 #filtros-v9 button.border {
+  min-height: 36px;
+  border-color: #e2e8f0;
+  border-radius: 9px;
+  padding: 7px 12px;
+  font-weight: 600;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

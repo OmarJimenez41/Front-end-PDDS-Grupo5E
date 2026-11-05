@@ -7,6 +7,7 @@ export function iniciarControlador(
   eventos: { mapa: (mapa: InstantaneaOperacion) => void; detalle: (lectura: LecturaOperacion) => void; error: (error: unknown, tieneMapa: boolean) => void },
   api?: ConsultasOperacion,
   intervalo = 2000,
+  limiteMs = 12000,
 ) {
   const abort = new AbortController()
   let activo = true, ejecutando = false, pendiente = false
@@ -25,12 +26,17 @@ export function iniciarControlador(
     if (!activo) return
     if (ejecutando) { pendiente = true; return }
     ejecutando = true
+    const peticion=new AbortController()
+    const cancelar=()=>peticion.abort()
+    abort.signal.addEventListener('abort',cancelar,{once:true})
+    const limite=setTimeout(()=>peticion.abort(new Error('La consulta tardó demasiado; reintentando automáticamente')),limiteMs)
     try {
-      const lectura = await leerOperacion(escenarioId, abort.signal, publicar, unidades, api)
+      const lectura = await leerOperacion(escenarioId, peticion.signal, publicar, unidades, api)
       if (activo) { unidades = lectura.unidades; eventos.detalle(lectura) }
     } catch (error) {
       if (activo && !abort.signal.aborted) eventos.error(error, ultimoMapa !== null)
     } finally {
+      clearTimeout(limite);abort.signal.removeEventListener('abort',cancelar)
       ejecutando = false
       if (activo) {
         if (pendiente) { pendiente = false; void ejecutar() }

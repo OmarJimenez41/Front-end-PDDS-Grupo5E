@@ -1,4 +1,4 @@
-import { consultarInstantanea, consultarUnidades, type InstantaneaOperacion, type UnidadesOperacion } from '../api/operacion'
+import { consultarInstantanea, consultarUnidades, consultarVistaOperativa, type InstantaneaOperacion, type UnidadesOperacion } from '../api/operacion'
 
 export type EstadoDetalle = 'actual' | 'pendiente' | 'desactualizado'
 export interface LecturaOperacion {
@@ -8,11 +8,12 @@ export interface LecturaOperacion {
 }
 
 export interface ConsultasOperacion {
+  vista?: (id:number,signal:AbortSignal)=>Promise<{mapa:InstantaneaOperacion;unidades:UnidadesOperacion}>
   mapa: (id: number, signal: AbortSignal) => Promise<InstantaneaOperacion>
   unidades: (id: number, signal: AbortSignal) => Promise<UnidadesOperacion>
 }
 
-const consultas: ConsultasOperacion = { mapa: consultarInstantanea, unidades: consultarUnidades }
+const consultas: ConsultasOperacion = { mapa: consultarInstantanea, unidades: consultarUnidades, vista:consultarVistaOperativa }
 const coincide = (a: InstantaneaOperacion, b: InstantaneaOperacion, u: UnidadesOperacion) =>
   a.escenarioId === b.escenarioId && a.escenarioId === u.escenarioId && a.versionEstado === b.versionEstado &&
   a.relojH === b.relojH && a.relojH === u.relojH
@@ -22,6 +23,11 @@ export async function leerOperacion(
   id: number, signal: AbortSignal, publicarMapa: (mapa: InstantaneaOperacion) => boolean,
   anterior: UnidadesOperacion | null, api: ConsultasOperacion = consultas,
 ): Promise<LecturaOperacion> {
+  if(api.vista){
+    const {mapa,unidades}=await api.vista(id,signal)
+    if(mapa.escenarioId!==unidades.escenarioId||mapa.relojH!==unidades.relojH||!publicarMapa(mapa))throw new Error('Corte operativo incoherente o anterior')
+    return {mapa,unidades,estadoDetalle:'actual'}
+  }
   let a = await api.mapa(id, signal)
   if (!publicarMapa(a)) throw new Error('Versión anterior o escenario incorrecto')
   for (let intento = 0; intento < 2; intento++) {
