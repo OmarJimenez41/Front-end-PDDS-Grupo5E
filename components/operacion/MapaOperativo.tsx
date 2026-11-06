@@ -134,7 +134,7 @@ export function MapaOperativo({ state, highlightOrderId, full = false, replanned
         {sobreAlmacen&&<span aria-hidden="true" className="absolute top-4 w-11 border-t border-slate-600" style={{left:'50%',transform:'translateX(-44px)'}}/>}
         <div className="relative mx-auto w-fit">
         <button type="button" onClick={() => {if(unidades.length===1){ctx.setRutasConsulta([]);ctx.setRutaProducto(null);ctx.setPanelActivo('flota');onUnidad?.(v.id)}else setGrupo(grupo === identificadorGrupo ? null : identificadorGrupo)}} title={unidades.map(q => `${q.codigo} · carga ${q.carga}/${q.capacidad} · ${estadoEnEspanol(q.estado)} · ${q.ocupacionPct == null ? 'ocupación no disponible' : `${q.ocupacionPct}% · ${luzOcupacion(q.ocupacionPct, q.capacidad, ctx.limites)}`}`).join('\n')} aria-label={unidades.length > 1 ? `${unidades.length} unidades en (${v.x}, ${v.y})` : `${v.codigo} · carga ${v.carga}/${v.capacidad} · ${estadoEnEspanol(v.estado)} · ${categoria}`} className={`mx-auto flex min-h-9 min-w-9 items-center justify-center rounded-full border-2 border-white px-1 font-bold text-white shadow ${unidades.some(q => q.id === unidadSeleccionada) ? 'ring-4 ring-blue-400' : ''} ${unidades.length > 1 ? 'bg-slate-700' : averiadas.has(v.id) ? colorAveria(v.id) : fondoLuz(categoria)}`}>
-          {unidades.length > 1 ? unidades.length : <Icono className="size-4" style={v.direccion == null ? undefined : { transform: `rotate(${v.direccion}deg)` }} />}
+          {unidades.length > 1 ? unidades.length : <Icono className="size-4" />}
         </button>
         {unidades.length === 1 && v.direccion != null && <span aria-label="Dirección del tramo" className="absolute left-full top-1/2 ml-0.5 leading-none text-blue-900" style={{ transform: `translateY(-50%) rotate(${v.direccion}deg)` }}>➜</span>}
         </div>
@@ -159,7 +159,7 @@ export function MapaOperativo({ state, highlightOrderId, full = false, replanned
     </div>
     <div className="absolute bottom-16 left-1/2 z-[8] flex -translate-x-1/2 gap-1 md:bottom-3" aria-label="Controles del mapa"><button onClick={() => zoom(1.25)} aria-label="Ampliar mapa" className="border bg-white px-3 py-2 font-bold shadow">+</button><button onClick={() => zoom(1 / 1.25)} aria-label="Reducir mapa" className="border bg-white px-3 py-2 font-bold shadow">−</button><button onClick={() => setCamara({ escala: 1, x: 0, y: 0 })} className="border bg-white px-2 py-2 text-xs font-bold shadow">Ajustar mapa</button></div>
     <Leyenda full={full} real={!!datos} incident={datos ? hayBloqueo : incident || replanned || isCollapse} averia={averiadas.size > 0} collapse={isCollapse} buscado={!!buscado} />
-    {datos.planAplicable===false&&datos.rutas.some(r=>r.pendientePlan)&&<p className="pointer-events-none absolute left-1/2 top-2 z-[4] max-w-[70%] -translate-x-1/2 rounded-lg border border-amber-200 bg-amber-50/95 px-3 py-1.5 text-[11px] text-amber-900">Líneas ámbar discontinuas: último plan, pendiente de actualización. La posición proviene del estado físico.</p>}
+    {datos.planAplicable===false&&datos.rutas.some(r=>r.pendientePlan)&&<p className="pointer-events-none absolute left-1/2 top-2 z-[4] max-w-[70%] -translate-x-1/2 rounded-lg border border-amber-200 bg-amber-50/95 px-3 py-1.5 text-[11px] text-amber-900">Líneas ámbar discontinuas: plan con pedidos pendientes de asignación o actualización. La posición proviene del estado físico.</p>}
   </div>
 }
 

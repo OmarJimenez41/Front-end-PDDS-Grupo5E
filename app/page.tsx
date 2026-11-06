@@ -442,7 +442,7 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
             <p>Ejecutándose en el servidor · <b>{fechaHora(sim.fechaSimulada, true)}</b>{sim.simulacion.estado === 'PAUSADA' && <span className="ml-1 font-bold text-amber-700">· en pausa</span>}</p>
             {sim.simulacion.tipo !== 'COLAPSO' && <div className="h-2 w-full bg-white" role="progressbar" aria-valuenow={Math.round(sim.progreso * 100)} aria-valuemin={0} aria-valuemax={100} aria-label="Avance de los cinco días"><div className="h-2 bg-blue-600" style={{ width: `${Math.round(sim.progreso * 100)}%` }} /></div>}
             <p className="text-slate-600">{sim.simulacion.tipo === 'COLAPSO' ? `Sin fecha de fin · ${sim.simulacion.pedidosIncorporados} pedidos ingresados` : `${Math.round(sim.progreso * 100)}% · ${sim.simulacion.pedidosIncorporados} de ${sim.simulacion.pedidosProgramados} pedidos ingresados`} · {sim.pedidos.entregados} entregados · {sim.simulacion.planificaciones} planificaciones</p>
-            {sim.simulacion.pedidosDescartados > 0 && <p className="font-semibold text-red-700">{sim.simulacion.pedidosDescartados} pedidos sin ruta factible (no entregados)</p>}
+            {sim.simulacion.pedidosDescartados > 0 && <p className="font-semibold text-red-700">{sim.simulacion.pedidosDescartados} pedidos no entregados (plazo vencido o sin asignación factible)</p>}
             {(sim.simulacion.estado === 'ERROR' || sim.simulacion.estado === 'INTERRUMPIDA') && <p className="font-semibold text-red-700">La simulación se detuvo: {sim.simulacion.ultimoError ?? sim.simulacion.estado}</p>}
             {simMsg && <p role="alert" className="font-semibold text-red-700">{simMsg}</p>}
           </div>}
