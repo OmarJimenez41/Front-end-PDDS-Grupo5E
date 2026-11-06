@@ -71,7 +71,7 @@ export interface VistaSimulacion {
   /** Fracción de los cinco días ya simulada, de 0 a 1. */
   progreso: number
   eventosPendientes: number | null
-  pedidos: { incorporados: number; entregados: number; entregadosATiempo: number; noEntregados: number; abiertos: number }
+  pedidos: { incorporados: number; entregados: number; entregadosATiempo: number; noEntregados: number; abiertos: number; sinRegistroLlegada?: number }
   acumulado?: Acumulado | null
   /** null mientras no colapse; solo en la simulación hasta el colapso. */
   colapso?: Colapso | null

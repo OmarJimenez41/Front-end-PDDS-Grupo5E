@@ -3,6 +3,7 @@
 // rutas del plan vigente y pedidos. El front-end no inventa nada de esto.
 
 import { type Acumulado, type VistaSimulacion, pedir } from './simulacion'
+import { llegadasConfirmadas } from '../operacion/cumplimiento'
 
 export type TipoVehiculo = 'AUTO' | 'MOTO' | 'BICICLETA'
 
@@ -184,6 +185,8 @@ export type Semaforo = 'verde' | 'ambar' | 'rojo'
 export interface PedidoRastreo {
   id: number; codigo: string; x: number; y: number; cantidad: number; tipo: 'REGULAR' | 'PRIORIZADO'; estado: EstadoPedido
   horaIngresoH: number; fechaLimiteH: number; entregadoEnH: number | null
+  /** Última llegada de las parciales confirmadas; null si falta historia completa. */
+  llegadaRealH?: number | null
   /** Llegada estimada según el plan vigente (null si ninguna ruta lo lleva). */
   etaH: number | null
   vehiculoId: number | null; vehiculoCodigo: string | null; tipoVehiculo: TipoVehiculo | null
@@ -278,17 +281,20 @@ export function datosMapa(estado: EstadoOperacion, plan: PlanDistribucion | null
   })
 
   const cerrado = (p: Pedido) => p.estado === 'ENTREGADO' || p.estado === 'NO_ENTREGADO'
+  const confirmadas = llegadasConfirmadas(estado.fisico?.servicios ?? [])
   const rastreo = pedidos.map(p => {
+    const historia = confirmadas.get(p.id)
+    const llegadaCompleta = p.estado === 'ENTREGADO' && historia?.cantidad === p.cantidad ? historia.ultimaH : null
     const partes = cerrado(p) ? [] : lleva.get(p.id) ?? []
     const servicios = cerrado(p) ? [] : (estado.fisico?.servicios ?? []).filter(s => s.pedidoId === p.id && !s.confirmada && !partes.some(x => x.parada.entregaId === s.entregaId))
     const r = partes[0]?.ruta
     const vehiculoServicio = servicios.length ? fisicos.find(v => v.id === servicios[0].vehiculoId) : undefined
     const llegada = cerrado(p) ? null : Math.max(eta.get(p.id) ?? -Infinity, ...servicios.map(s => s.llegadaH))
     const llegadaReal = llegada === -Infinity ? null : llegada
-    const margen = cerrado(p) ? (p.entregadoEnH != null ? p.fechaLimiteH - p.entregadoEnH : null) : llegadaReal != null ? p.fechaLimiteH - llegadaReal : p.fechaLimiteH - reloj
+    const margen = cerrado(p) ? (llegadaCompleta != null ? p.fechaLimiteH - llegadaCompleta : null) : llegadaReal != null ? p.fechaLimiteH - llegadaReal : p.fechaLimiteH - reloj
     return {
       id: p.id, codigo: p.codigo, x: p.posX, y: p.posY, cantidad: p.cantidad, tipo: p.tipo, estado: estadoVisto(p),
-      horaIngresoH: p.horaIngresoH, fechaLimiteH: p.fechaLimiteH, entregadoEnH: p.entregadoEnH, etaH: llegadaReal,
+      horaIngresoH: p.horaIngresoH, fechaLimiteH: p.fechaLimiteH, entregadoEnH: p.entregadoEnH, llegadaRealH: llegadaCompleta, etaH: llegadaReal,
       vehiculoId: r?.vehiculoId ?? vehiculoServicio?.id ?? null, vehiculoCodigo: r ? fisicos.find(v => v.id === r.vehiculoId)?.codigo ?? null : vehiculoServicio?.codigo ?? null, tipoVehiculo: r?.tipoVehiculo ?? vehiculoServicio?.tipo ?? null,
       asociaciones: [...partes.map(({ ruta, parada }) => ({ rutaId: ruta.id, vehiculoId: ruta.vehiculoId, vehiculoCodigo: fisicos.find(v => v.id === ruta.vehiculoId)?.codigo ?? null, tipoVehiculo: ruta.tipoVehiculo, cantidad: parada.cantidad, etaH: parada.etaH, entregado: parada.entregado, enServicio: (estado.fisico?.servicios ?? []).some(s => !s.confirmada && s.entregaId === parada.entregaId) })), ...servicios.map(s => { const v = fisicos.find(v => v.id === s.vehiculoId); return { rutaId: null, vehiculoId: s.vehiculoId, vehiculoCodigo: v?.codigo ?? null, tipoVehiculo: v?.tipo ?? null, cantidad: s.cantidad, etaH: s.llegadaH, entregado: false, enServicio: true } })],
       margenH: margen, semaforo: cerrado(p) ? null : semaforo(margen),

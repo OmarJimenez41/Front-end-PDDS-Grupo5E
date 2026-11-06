@@ -14,6 +14,7 @@ import { PanelFlota, ocupacion } from '@/components/operacion/PanelFlota'
 import { PanelEnvios } from '@/components/operacion/PanelEnvios'
 import { MapaOperativo } from '@/components/operacion/MapaOperativo'
 import { estadoEnEspanol } from '@/lib/operacion/mejorasV9'
+import { cumplimientoPlazo } from '@/lib/operacion/cumplimiento'
 import { PanelIndicadoresV9 } from '@/components/operacion/PanelIndicadoresV9'
 import { PanelAlmacenesV9 } from '@/components/operacion/PanelAlmacenesV9'
 import { PanelDatosV9 } from '@/components/operacion/PanelDatosV9'
@@ -200,10 +201,11 @@ function FichaPedido({ p, hora, onCerrar, onUnidad }: { p: PedidoRastreo; hora: 
     ['Fecha límite', hora(p.fechaLimiteH)],
     ['Rutas y unidades', p.asociaciones.length ? <span key="asociaciones" className="flex flex-col gap-1">{p.asociaciones.map((a, i) => <button key={`${a.rutaId}-${i}`} onClick={() => { v9.setRutaProducto(a.rutaId); onUnidad(a.vehiculoId) }} aria-label={a.rutaId == null ? `Ver unidad ${a.vehiculoCodigo ?? a.vehiculoId}` : `Ver ruta ${a.rutaId} del pedido ${p.codigo}`} className="rounded-lg border border-blue-100 bg-blue-50 px-2 py-2 text-left text-blue-700 hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-blue-600">{a.rutaId == null ? 'Servicio en curso' : `Ruta ${a.rutaId}`} · {a.vehiculoCodigo ?? 'Unidad no disponible'} · {a.cantidad == null ? 'cantidad no disponible' : `${a.cantidad} u`} · ETA {hora(a.etaH)}{a.entregado ? ' · entregado' : a.enServicio ? ' · en servicio' : ''}</button>)}</span> : cerrado ? 'Sin ruta vigente' : 'Sin asignación'],
     cerrado
-      ? ['Entrega', p.entregadoEnH != null ? `${hora(p.entregadoEnH)} · ${p.entregadoEnH <= p.fechaLimiteH ? 'a tiempo' : 'fuera de plazo'}` : 'Sin entregar']
+      ? ['Llegada real', p.llegadaRealH != null ? `${hora(p.llegadaRealH)} · ${cumplimientoPlazo(p)}` : p.estado === 'ENTREGADO' ? 'Sin registro de llegada' : 'Sin entregar']
       : ['Llegada estimada', p.etaH != null ? hora(p.etaH) : 'Sin ruta asignada'],
   ]
   const luz = cerrado ? null : semaforo(p.margenH, u.pedido)
+  if (p.entregadoEnH != null) filas.push(['Fin de descarga', hora(p.entregadoEnH)])
   if (!cerrado && p.margenH != null) filas.push(['Margen', <span key="m" className={luz ? TEXTO_SEMAFORO[luz] : ''}>{p.margenH.toFixed(1)} h{luz ? ` · ${luz === 'verde' ? 'holgado' : luz === 'ambar' ? 'justo' : 'crítico'}` : ''}</span>])
   return <div className="mt-1 border border-slate-200 bg-white p-3 shadow-lg">
     <div className="flex items-start justify-between gap-2"><div><p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Ficha del pedido</p><p className="text-sm font-bold">{p.codigo}</p></div><span className={`border px-2 py-0.5 font-bold ${tono}`}>{ETIQUETA_ESTADO[p.estado]}</span></div>
@@ -334,7 +336,7 @@ function CollapseResults({variant='collapse',onLocate,sim,segReal=0,hora=horaSim
  if(!sim)return <section className="rounded-xl border p-4 text-xs text-slate-500">No hay un resultado del servidor para mostrar.</section>
  const c=sim.pedidos,ac=sim.acumulado,col=sim.colapso
  const titulo=variant==='five'?'Resumen del periodo':variant==='day'?'Corte de operación':col?'Colapso operativo':'Finalización sin colapso'
- const indicadores=[['Pedidos incorporados',c.incorporados],['Entregados a tiempo',c.entregadosATiempo],['Entregados fuera de plazo',Math.max(0,c.entregados-c.entregadosATiempo)],['No entregados',c.noEntregados],['Pendientes al corte',c.abiertos],['Recorrido real',ac?ac.distanciaKm.toFixed(1)+' km':'No disponible'],['Costo real',ac?'S/ '+ac.costo.toFixed(2):'No disponible']]
+ const indicadores=[['Pedidos incorporados',c.incorporados],['Entregados a tiempo',c.entregadosATiempo],['Entregados fuera de plazo',Math.max(0,c.entregados-c.entregadosATiempo-(c.sinRegistroLlegada??0))],['No entregados',c.noEntregados],['Pendientes al corte',c.abiertos],['Recorrido real',ac?ac.distanciaKm.toFixed(1)+' km':'No disponible'],['Costo real',ac?'S/ '+ac.costo.toFixed(2):'No disponible']]
  return <section className="space-y-3 text-xs"><h3 className="text-base font-bold">{titulo}</h3><div className="rounded-xl border bg-slate-50 p-3 leading-relaxed"><p>Inicio: {fechaHora(sim.fechaInicio)}</p><p>Corte final: {fechaHora(sim.fechaSimulada)}</p><p>Tiempo real ejecutado: {duracion(segReal)}</p><p>Estado: {estadoEnEspanol(sim.simulacion.estado)}</p>{sim.cierre&&<p className="mt-2 font-semibold">{estadoEnEspanol(sim.cierre.motivo)}: {sim.cierre.detalle}</p>}{sim.simulacion.ultimoError&&<p className="mt-2 text-red-700">{sim.simulacion.ultimoError}</p>}</div><div className="grid grid-cols-2 gap-2">{indicadores.map(([k,v])=><div className="rounded-xl border p-3" key={String(k)}><p className="text-slate-500">{k}</p><b className="mt-1 block text-base">{v}</b></div>)}</div>{col?.pedido&&<button onClick={()=>onLocate?.(col.pedido!.codigo)} className="rounded-xl border border-red-200 bg-red-50 p-3 text-left text-red-800">Pedido causante: {col.pedido.codigo} · ({col.pedido.posX},{col.pedido.posY}) · plazo {hora(col.pedido.fechaLimiteH)}</button>}<button className="w-full rounded-xl bg-blue-700 px-3 py-3 font-bold text-white" onClick={()=>ctx.setPanelActivo('reportes')}>Abrir reporte legible y última planificación estable</button></section>
 }
 
@@ -399,9 +401,11 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
   // Rendimiento con datos reales: cumplimiento contado sobre los pedidos del escenario
   const rend = mapa && historialCompleto ? (() => {
     const r = mapa.rastreo, entregados = r.filter(q => q.estado === 'ENTREGADO')
-    const aTiempo = entregados.filter(q => q.entregadoEnH != null && q.entregadoEnH <= q.fechaLimiteH).length
+    const aTiempo = entregados.filter(q => cumplimientoPlazo(q) === 'a tiempo').length
+    const tarde = entregados.filter(q => cumplimientoPlazo(q) === 'fuera de plazo').length
+    const sinRegistro = entregados.length - aTiempo - tarde
     const noEntregados = r.filter(q => q.estado === 'NO_ENTREGADO').length
-    return { total: r.length, aTiempo, tarde: entregados.length - aTiempo, noEntregados, abiertos: r.length - entregados.length - noEntregados }
+    return { total: r.length, aTiempo, tarde, sinRegistro, noEntregados, abiertos: r.length - entregados.length - noEntregados }
   })() : null
   const field = 'mt-1 w-full border border-slate-200 bg-white px-2 py-1.5'
   return <div className="relative h-full">
@@ -469,7 +473,7 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
         {performance && !simFinished && (rend
           ? <div className="border border-slate-200 bg-white p-3 text-xs">
               <p className="text-slate-500">Cumplimiento · {rend.total} pedidos del escenario</p>
-              <div className="mt-1.5 grid grid-cols-2 gap-1.5">{([['A tiempo', rend.aTiempo, 'text-emerald-700'], ['Fuera de plazo', rend.tarde, 'text-amber-700'], ['No entregados', rend.noEntregados, 'text-red-700'], ['Pendientes o en ruta', rend.abiertos, 'text-slate-700']] as [string, number, string][]).map(([t, n, c]) => <div key={t} className="border border-slate-100 bg-slate-50 px-2 py-1.5"><p className="text-[10px] text-slate-500">{t}</p><b className={`text-sm ${c}`}>{n} · {porcentaje(n, rend.total)}</b></div>)}</div>
+              <div className="mt-1.5 grid grid-cols-2 gap-1.5">{([['A tiempo', rend.aTiempo, 'text-emerald-700'], ['Fuera de plazo', rend.tarde, 'text-amber-700'], ['No entregados', rend.noEntregados, 'text-red-700'], ['Pendientes o en ruta', rend.abiertos, 'text-slate-700']] as [string, number, string][]).map(([t, n, c]) => <div key={t} className="border border-slate-100 bg-slate-50 px-2 py-1.5"><p className="text-[10px] text-slate-500">{t}</p><b className={`text-sm ${c}`}>{n} · {porcentaje(n, rend.total)}</b></div>)}</div>{rend.sinRegistro > 0 && <p className="mt-2 text-xs text-slate-500">{rend.sinRegistro} entregados sin registro de llegada; no se clasifican por plazo.</p>}
               <p className="mt-2 text-slate-600">Plan vigente: <b>{mapa?.resumen.distanciaPlanKm != null ? `${Math.round(mapa.resumen.distanciaPlanKm).toLocaleString('es-PE')} km` : '—'}</b> · <b>{mapa?.resumen.costoPlan != null ? `S/ ${Math.round(mapa.resumen.costoPlan).toLocaleString('es-PE')}` : '—'}</b></p>
               {mapa?.acumulado ? <p className="mt-1 text-slate-600">Recorrido hasta ahora: <b>{Math.round(mapa.acumulado.distanciaKm).toLocaleString('es-PE')} km</b> · <b>S/ {Math.round(mapa.acumulado.costo).toLocaleString('es-PE')}</b> · {mapa.acumulado.entregas} entregas</p> : <p className="mt-1 text-[10px] text-slate-400">El back-end no informó la distancia ni el costo recorridos.</p>}
             </div>
