@@ -2,7 +2,7 @@
 // Lo que dibuja el mapa sale de aquí: almacenes y vehículos (estado físico),
 // rutas del plan vigente y pedidos. El front-end no inventa nada de esto.
 
-import { type Acumulado, type VistaSimulacion, pedir } from './simulacion'
+import { type Acumulado, type VistaSimulacion, API_URL, pedir } from './simulacion'
 
 export type TipoVehiculo = 'AUTO' | 'MOTO' | 'BICICLETA'
 
@@ -65,7 +65,12 @@ export interface PedidoRastreo {
   etaH: number | null
   vehiculoId: number | null; vehiculoCodigo: string | null; tipoVehiculo: TipoVehiculo | null
   margenH: number | null; semaforo: Semaforo | null
+  /** Abierto y con la fecha límite ya pasada en el reloj del mapa (el back-end lo cierra en su siguiente paso). */
+  vencido?: boolean
 }
+
+/** Ruta del plan con su trazado en el tiempo: el mapa anima la unidad sobre ella con el reloj visual. */
+export interface RutaMapa { id: number; vehiculoId: number; tipo: TipoVehiculo; inicioH: number; finH: number; trazado: PuntoTrazado[] }
 
 export interface MapaDatos {
   relojH: number
@@ -73,13 +78,14 @@ export interface MapaDatos {
   almacenes: (AlmacenFisico & { vehiculosEnBase: number; pct: number | null; unidadesFuera: number; pedidosPorEntregar: number })[]
   /** Solo los vehículos que están recorriendo una ruta en este instante. */
   vehiculos: { id: number; codigo: string; tipo: TipoVehiculo; x: number; y: number; carga: number; capacidad: number }[]
-  rutas: { id: number; vehiculoId: number; tipo: TipoVehiculo; puntos: [number, number][]; recorrido: [number, number][] }[]
-  /** Pedidos aún no entregados, con su semáforo de margen (fecha límite − ETA). */
-  pedidos: { id: number; codigo: string; x: number; y: number; cantidad: number; estado: EstadoPedido; semaforo: Semaforo; margenH: number | null }[]
+  /** Rutas del plan vigente que aún no terminan (en curso o por salir), ordenadas por salida. */
+  rutas: RutaMapa[]
+  /** Pedidos aún no entregados, con su semáforo de margen (fecha límite − ETA); el margen nunca es negativo. */
+  pedidos: { id: number; codigo: string; x: number; y: number; cantidad: number; estado: EstadoPedido; semaforo: Semaforo; margenH: number | null; vencido: boolean }[]
   /** Todos los pedidos del escenario, para el buscador. */
   rastreo: PedidoRastreo[]
   /** Toda la flota del escenario (para elegir la unidad de una avería). */
-  flota: { id: number; codigo: string; tipo: TipoVehiculo; disponible: boolean; enRuta: boolean; averiada: boolean }[]
+  flota: { id: number; codigo: string; tipo: TipoVehiculo; disponible: boolean; enRuta: boolean; averiada: boolean; carga: number; capacidad: number }[]
   /** Incidencias vigentes en el reloj actual. */
   incidencias: Incidencia[]
   /** Distancia, costo y entregas realmente acumulados en el escenario (null si el back-end no lo informa). */
@@ -95,7 +101,7 @@ export interface Umbrales { verde: number; rojo: number }
 export const semaforo = (margen: number | null, u: Umbrales = UMBRALES_PEDIDO): Semaforo => margen == null || margen >= u.verde ? 'verde' : margen < u.rojo ? 'rojo' : 'ambar'
 
 /** Posición sobre el trazado en el instante t (interpolación lineal entre puntos). */
-function posicionEn(trazado: PuntoTrazado[], t: number): { x: number; y: number; indice: number } {
+export function posicionEn(trazado: PuntoTrazado[], t: number): { x: number; y: number; indice: number } {
   if (t <= trazado[0].instanteH) return { x: trazado[0].x, y: trazado[0].y, indice: 0 }
   for (let i = 1; i < trazado.length; i++) {
     const a = trazado[i - 1], b = trazado[i]
@@ -111,7 +117,7 @@ function posicionEn(trazado: PuntoTrazado[], t: number): { x: number; y: number;
 export function datosMapa(estado: EstadoOperacion, plan: PlanDistribucion | null, pedidos: Pedido[], incidencias: Incidencia[] = []): MapaDatos {
   const reloj = estado.fisico?.relojH ?? estado.relojH
   const fisicos = estado.fisico?.vehiculos ?? []
-  const rutasActivas = (plan?.rutas ?? []).filter(r => r.trazado.length > 1 && r.horaFinH >= reloj)
+  const rutasActivas = (plan?.rutas ?? []).filter(r => r.trazado.length > 1 && r.horaFinH >= reloj).sort((a, b) => a.horaInicioH - b.horaInicioH)
   // Viaje en curso de cada vehículo: una unidad puede tener varios viajes seguidos en el plan
   const enCurso = new globalThis.Map<number, RutaPlan>()
   for (const r of rutasActivas) if (r.horaInicioH <= reloj && (enCurso.get(r.vehiculoId)?.horaInicioH ?? -Infinity) < r.horaInicioH) enCurso.set(r.vehiculoId, r)
@@ -123,13 +129,7 @@ export function datosMapa(estado: EstadoOperacion, plan: PlanDistribucion | null
     return { id: r.vehiculoId, codigo: f?.codigo ?? `V-${r.vehiculoId}`, tipo: r.tipoVehiculo, x: p.x, y: p.y, carga: f?.carga ?? r.cargaTotal, capacidad: f?.capacidad ?? r.cargaTotal }
   })
 
-  const rutas = rutasActivas.map(r => {
-    const p = posicionEn(r.trazado, reloj)
-    const puntos = r.trazado.map(q => [q.x, q.y] as [number, number])
-    // Lo ya recorrido se dibuja tenue; lo que falta, sólido
-    const recorrido = r.horaInicioH <= reloj ? [...puntos.slice(0, p.indice), [p.x, p.y] as [number, number]] : []
-    return { id: r.id, vehiculoId: r.vehiculoId, tipo: r.tipoVehiculo, puntos, recorrido }
-  })
+  const rutas = rutasActivas.map(r => ({ id: r.id, vehiculoId: r.vehiculoId, tipo: r.tipoVehiculo, inicioH: r.horaInicioH, finH: r.horaFinH, trazado: r.trazado }))
 
   // Qué ruta lleva cada pedido y cuándo llega su última parte (un pedido puede repartirse en varias paradas)
   const eta = new globalThis.Map<number, number>()
@@ -141,22 +141,26 @@ export function datosMapa(estado: EstadoOperacion, plan: PlanDistribucion | null
   // El back-end deja PENDIENTE hasta la entrega; si una ruta del plan ya lo lleva, se muestra como asignado
   const estadoVisto = (p: Pedido): EstadoPedido => p.estado === 'PENDIENTE' && lleva.has(p.id) ? 'ASIGNADO' : p.estado
   const abiertos = pedidos.filter(p => p.estado !== 'ENTREGADO' && p.estado !== 'NO_ENTREGADO')
+  // Margen = fecha límite − llegada estimada (o − reloj si ninguna ruta lo lleva). Un plan certificado nunca
+  // llega tarde y el back-end cierra como no entregado lo que vence sin ruta: un margen negativo solo puede ser
+  // el desfase de un instante entre consultas, y se muestra como «plazo vencido», nunca como horas negativas.
+  const margenDe = (p: Pedido, llegada: number | undefined | null) => Math.max(0, p.fechaLimiteH - (llegada ?? reloj))
+  const vencido = (p: Pedido) => p.fechaLimiteH < reloj - 1e-9
   const marcas = abiertos.map(p => {
-    const llegada = eta.get(p.id)
-    const margen = llegada != null ? p.fechaLimiteH - llegada : p.fechaLimiteH - reloj
-    return { id: p.id, codigo: p.codigo, x: p.posX, y: p.posY, cantidad: p.cantidad, estado: estadoVisto(p), semaforo: semaforo(margen), margenH: margen }
+    const margen = margenDe(p, eta.get(p.id))
+    return { id: p.id, codigo: p.codigo, x: p.posX, y: p.posY, cantidad: p.cantidad, estado: estadoVisto(p), semaforo: vencido(p) ? 'rojo' as const : semaforo(margen), margenH: margen, vencido: vencido(p) }
   })
 
   const cerrado = (p: Pedido) => p.estado === 'ENTREGADO' || p.estado === 'NO_ENTREGADO'
   const rastreo = pedidos.map(p => {
     const r = lleva.get(p.id)
     const llegada = cerrado(p) ? null : eta.get(p.id) ?? null
-    const margen = cerrado(p) ? (p.entregadoEnH != null ? p.fechaLimiteH - p.entregadoEnH : null) : llegada != null ? p.fechaLimiteH - llegada : p.fechaLimiteH - reloj
+    const margen = cerrado(p) ? (p.entregadoEnH != null ? p.fechaLimiteH - p.entregadoEnH : null) : margenDe(p, llegada)
     return {
       id: p.id, codigo: p.codigo, x: p.posX, y: p.posY, cantidad: p.cantidad, tipo: p.tipo, estado: estadoVisto(p),
       horaIngresoH: p.horaIngresoH, fechaLimiteH: p.fechaLimiteH, entregadoEnH: p.entregadoEnH, etaH: llegada,
       vehiculoId: r?.vehiculoId ?? null, vehiculoCodigo: r ? fisicos.find(v => v.id === r.vehiculoId)?.codigo ?? `V-${r.vehiculoId}` : null, tipoVehiculo: r?.tipoVehiculo ?? null,
-      margenH: margen, semaforo: cerrado(p) ? null : semaforo(margen),
+      margenH: margen, semaforo: cerrado(p) ? null : vencido(p) ? 'rojo' : semaforo(margen), vencido: !cerrado(p) && vencido(p),
     }
   })
 
@@ -175,7 +179,7 @@ export function datosMapa(estado: EstadoOperacion, plan: PlanDistribucion | null
   })
 
   const averiadas = new Set(incidencias.filter(i => i.tipo === 'AVERIA').map(i => i.vehiculoId))
-  const flota = fisicos.map(v => ({ id: v.id, codigo: v.codigo, tipo: v.tipo, disponible: v.disponible, enRuta: enRuta.has(v.id), averiada: averiadas.has(v.id) }))
+  const flota = fisicos.map(v => ({ id: v.id, codigo: v.codigo, tipo: v.tipo, disponible: v.disponible, enRuta: enRuta.has(v.id), averiada: averiadas.has(v.id), carga: v.carga, capacidad: v.capacidad }))
 
   return {
     relojH: reloj, almacenes, vehiculos, rutas, pedidos: marcas, rastreo, flota, incidencias, acumulado: estado.acumulado ?? null,
@@ -183,9 +187,43 @@ export function datosMapa(estado: EstadoOperacion, plan: PlanDistribucion | null
   }
 }
 
-/** Una vuelta de consulta: estado, plan y pedidos del escenario, ya listos para dibujar. */
-export async function consultarMapa(escenarioId: number): Promise<MapaDatos> {
-  const [estado, plan, pedidos, incidencias] = await Promise.all([consultarEstado(escenarioId), consultarPlan(escenarioId), consultarPedidos(escenarioId), incidenciasVigentes(escenarioId).catch(() => [])])
+/** Respuesta de GET /api/escenarios/{id}/mapa: todo lo del mapa en una sola lectura coherente, con solo los pedidos abiertos. */
+interface MapaLigero {
+  escenarioId: number; versionEstado: number; relojH: number
+  fisico: EstadoOperacion['fisico']; acumulado: Acumulado | null
+  plan: PlanDistribucion | null; pedidos: Pedido[]; incidencias: Incidencia[]
+}
+
+/** Los pedidos abiertos recién leídos reemplazan a su versión de la lista completa (que se refresca más despacio). */
+function unirPedidos(todos: Pedido[] | null, abiertos: Pedido[]): Pedido[] {
+  if (!todos) return abiertos
+  const porId = new globalThis.Map(todos.map(p => [p.id, p]))
+  for (const p of abiertos) porId.set(p.id, p)
+  return [...porId.values()]
+}
+
+/** false si el back-end no tiene GET /mapa (versión anterior): se usa la consulta en cuatro llamadas. */
+let hayMapaLigero = true
+
+/**
+ * Una vuelta de consulta, ya lista para dibujar. Usa GET /mapa (una sola transacción, solo pedidos abiertos);
+ * `todos` es la lista completa de pedidos, leída aparte y con menos frecuencia, para el buscador y el rendimiento.
+ * Antes se descargaban todos los pedidos (paginados de 500 en 500) en cada vuelta: en una simulación de cinco
+ * días con miles de pedidos, cada consulta tardaba más que el propio intervalo de refresco.
+ */
+export async function consultarMapa(escenarioId: number, todos: Pedido[] | null = null): Promise<MapaDatos> {
+  if (hayMapaLigero) {
+    const r = await fetch(`${API_URL}/api/escenarios/${escenarioId}/mapa`, { cache: 'no-store' })
+    if (r.ok) {
+      const m = await r.json() as MapaLigero
+      const estado: EstadoOperacion = { escenarioId, versionEstado: m.versionEstado, relojH: m.relojH, horizonteH: null, ultimoPlanId: m.plan?.id ?? null, fisico: m.fisico, acumulado: m.acumulado }
+      return datosMapa(estado, m.plan, unirPedidos(todos, m.pedidos), m.incidencias)
+    }
+    if (r.status !== 404) { const cuerpo = await r.json().catch(() => null); throw new Error(cuerpo?.mensaje ?? `Error ${r.status} en /mapa`) }
+  }
+  const [estado, plan, pedidos, incidencias] = await Promise.all([consultarEstado(escenarioId), consultarPlan(escenarioId), todos ? Promise.resolve(todos) : consultarPedidos(escenarioId), incidenciasVigentes(escenarioId).catch(() => [])])
+  // El escenario existe (si no, consultarEstado habría fallado): el 404 era del endpoint, que este back-end no tiene
+  hayMapaLigero = false
   return datosMapa(estado, plan, pedidos, incidencias)
 }
 
