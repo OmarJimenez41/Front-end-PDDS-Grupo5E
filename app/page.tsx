@@ -317,6 +317,16 @@ function ScenarioSelect({scenario,onStart}:{scenario:Scenario;onStart:(tipo:SimT
  <button onClick={()=>void iniciar()} disabled={bloqueado} className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-3 font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300"><Play className="size-4"/>{starting?'Iniciando…':scenario==='five'?'Iniciar simulación de cinco días':'Iniciar simulación hasta el colapso'}</button><p role="alert" className="text-red-700">{error}</p></section>
 }
 
+/**
+ * Al terminar una simulación (cinco días o hasta el colapso) abre el centro de reportes con su reporte de cierre y
+ * la última planificación estable. Una sola vez por escenario: si el usuario lo cierra, no se vuelve a abrir.
+ */
+function AbrirReporteAlTerminar({ escenarioId }: { escenarioId: number | null }) {
+  const v9 = useV9(), abierto = useRef<number | null>(null)
+  useEffect(() => { if (escenarioId != null && abierto.current !== escenarioId) { abierto.current = escenarioId; v9.setPanelActivo('reportes') } }, [escenarioId])
+  return null
+}
+
 // Resumen final de una simulación. Con la simulación del back-end muestra sus conteos, lo realmente recorrido y,
 // en el colapso, el instante y el pedido causante; sin ella, los valores de ejemplo del prototipo.
 function CollapseResults({variant='collapse',onLocate,sim,segReal=0,hora=horaSimulada}:{variant?:'five'|'collapse'|'day';onLocate?:(codigo:string)=>void;sim?:VistaSimulacion|null;segReal?:number;hora?:(h:number)=>string}){
@@ -342,6 +352,8 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
   const [panel, setPanel] = useState(false)
   const simActive = scenario !== 'day' && (state === 'running' || state === 'incident')
   const simFinished = scenario !== 'day' && (state === 'complete' || state === 'collapse')
+  // Al iniciar, el panel se recoge para ver el mapa; al terminar se vuelve a abrir con el resumen final
+  useEffect(() => { if (simFinished && sim) setPanel(true) }, [simFinished, sim?.simulacion.escenarioId])
   // Momento de la simulación de cinco días que se está viendo (T0–T3), derivado del estado
   const simStep = state === 'complete' ? 3 : state === 'incident' ? 1 : state === 'running' ? (replanned ? 2 : 0) : -1
   // Instante vigente que el sistema asigna a una avería, coherente con el reloj del encabezado
@@ -652,7 +664,8 @@ export default function Home() {
     if (simId == null || !simAlive) return
     const version = generaciones.actual()
     return sondearSerial(() => consultarSimulacion(simId), v => {
-      setSim(v); if (v.simulacion.estado === 'FINALIZADA') setState(v.colapso ? 'collapse' : 'complete')
+      // Cualquier estado final (también ERROR o INTERRUMPIDA) muestra el resumen y el reporte: antes solo FINALIZADA
+      setSim(v); if (!simViva(v)) setState(v.colapso ? 'collapse' : 'complete')
     }, () => generaciones.vigente(version))
   }, [simId, simAlive, revisionSim])
   // Tiempo real de ejecución: avanza con el reloj del navegador mientras la simulación está EJECUTANDO y se
@@ -716,7 +729,7 @@ export default function Home() {
           {role === 'operador' && <Operator mapaActual={operacion.conexion === 'actual'} generaciones={generaciones} invalidarSim={invalidarSim} recuperarDia={recuperarDia} onUmbrales={setUmbrales} mapa={mapa} escenarioId={mapaVivo ? escenarioMapa : null} onCambio={refrescar} hora={hora} segReal={segReal} scenario={scenario} setScenario={setScenario} state={scenario === 'day' ? effectiveState : state} setState={setState} replanned={replanned} setReplanned={setReplanned} sim={sim} setSim={setSim} unidadSeleccionada={unidadSeleccionada} onUnidad={seleccionarUnidad} buscado={buscado} setBuscado={setBuscado} warehouse={almacenSeleccionado} setWarehouse={seleccionarAlmacen} historialCompleto={historialActual !== null && estadoHistorial === 'actual'} />}
           {role === 'visualizador' && <Viewer estadoUrl={estadoUrl} esDia={esDia} sim={sim ?? vistaSeleccionada} mapa={mapa} hora={hora} segReal={segReal} scenario={scenario} state={effectiveState} setState={setState} replanned={replanned} unidadSeleccionada={unidadSeleccionada} onUnidad={seleccionarUnidad} buscado={buscado} setBuscado={setBuscado} warehouse={almacenSeleccionado} setWarehouse={seleccionarAlmacen} />}
           <PanelFlota key={`flota-${escenarioMapa ?? 'sin-escenario'}`} unidades={operacion.unidades?.unidades ?? null} detalle={operacion.detalle} hora={hora} seleccion={unidadSeleccionada} onSeleccion={seleccionarUnidad} incidencias={operacion.mapa?.incidencias ?? []} onPedido={setBuscado} />
-          <PanelAlmacenesV9 hora={hora} onAlmacen={codigo => seleccionarAlmacen(NOMBRE_ALMACEN[codigo] ?? codigo)} onUnidad={seleccionarUnidad} onPedido={setBuscado}/><PanelDatosV9/><PanelIndicadoresV9 hora={hora}/><PanelReportesV9 hora={hora}/>
+          <PanelAlmacenesV9 hora={hora} onAlmacen={codigo => seleccionarAlmacen(NOMBRE_ALMACEN[codigo] ?? codigo)} onUnidad={seleccionarUnidad} onPedido={setBuscado}/><PanelDatosV9/><PanelIndicadoresV9 hora={hora}/><PanelReportesV9 hora={hora} escenarioId={escenarioMapa}/><AbrirReporteAlTerminar escenarioId={sim && !simViva(sim) && sim.simulacion.tipo !== 'DIA_A_DIA' ? sim.simulacion.escenarioId : null} />
           <PanelIncidenciasV9 hora={hora} onUnidad={seleccionarUnidad} />
           <PanelEnvios onAlmacen={codigo => seleccionarAlmacen(NOMBRE_ALMACEN[codigo] ?? codigo)} key={`envios-${escenarioMapa ?? 'sin-escenario'}`} mapa={operacion.mapa} unidades={operacion.detalle === 'actual' ? operacion.unidades : null} historial={historialActual} estadoHistorial={estadoHistorial} estadoMapa={operacion.conexion} hora={hora} onPedido={setBuscado} onUnidad={seleccionarUnidad} />
         </div>}
