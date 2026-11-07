@@ -1,6 +1,6 @@
 'use client'
 
-import { useContext, useEffect, useRef, useState } from 'react'
+import { type ReactNode, useContext, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Bike, Motorbike, Car, MapPin, Warehouse, Wrench, X } from 'lucide-react'
 import { type EstadoPedido, type MapaDatos, type PedidoRastreo, type TipoVehiculo, type Umbrales, type UnidadOperativa, agruparPosiciones, semaforo } from '@/lib/api/operacion'
 import { luzOcupacion, estadoEnEspanol, unidadCumple, almacenCumple } from '../../lib/operacion/mejorasV9'
@@ -18,7 +18,7 @@ const tonoStock = (pct: number, u: Umbrales) => pct === 0 ? 'vacío' : pct >= u.
 const TEXTO_SEMAFORO = { 'vacío': 'text-slate-700', verde: 'text-emerald-700', ambar: 'text-amber-700', rojo: 'text-red-700' } as const
 const ETIQUETA_ESTADO: Record<EstadoPedido, string> = { PENDIENTE: 'Pendiente de asignar', ASIGNADO: 'Asignado a una ruta', EN_RUTA: 'En ruta', ENTREGADO: 'Entregado', NO_ENTREGADO: 'No entregado' }
 
-export function MapaOperativo({ state, highlightOrderId, full = false, replanned = false, onWarehouse, onPedido, datos, buscado, almacenMarcado, unidadSeleccionada, onUnidad }: { state: ExecState; highlightOrderId?: string | null; almacenMarcado?: string | null; full?: boolean; replanned?: boolean; onWarehouse?: (name: string) => void; onPedido?: (codigo: string) => void; datos?: MapaDatos | null; buscado?: string | null; unidadSeleccionada?: number | null; onUnidad?: (id: number) => void }) {
+export function MapaOperativo({ state, highlightOrderId, full = false, replanned = false, onWarehouse, onPedido, datos, buscado, almacenMarcado, unidadSeleccionada, onUnidad, reservaIzquierda = 176, reservaDerecha = 360, avisoExtra }: { reservaIzquierda?: number; reservaDerecha?: number; avisoExtra?: ReactNode; state: ExecState; highlightOrderId?: string | null; almacenMarcado?: string | null; full?: boolean; replanned?: boolean; onWarehouse?: (name: string | null) => void; onPedido?: (codigo: string | null) => void; datos?: MapaDatos | null; buscado?: string | null; unidadSeleccionada?: number | null; onUnidad?: (id: number | null) => void }) {
   const u = useContext(UmbralesCtx)
   const ctx = useV9()
   const [grupo, setGrupo] = useState<string | null>(null)
@@ -47,12 +47,27 @@ export function MapaOperativo({ state, highlightOrderId, full = false, replanned
     setCamara(c => centrarCamara(c, a, rect.width, rect.height))
   }, [almacenMarcado])
   useEffect(() => { if (unidadSeleccionada == null && almacenMarcado == null) ultimoObjetivo.current = null }, [unidadSeleccionada, almacenMarcado])
+  const [anchoArea, setAnchoArea] = useState(0)
+  // Seguimiento: mientras la unidad esté seleccionada (ícono resaltado en celeste), la cámara la
+  // acompaña a medida que avanza. Arrastrar el mapa a mano suelta el seguimiento hasta volver a
+  // seleccionarla; deseleccionarla deja el mapa quieto donde está.
+  const seguir = useRef(true)
+  useEffect(() => { seguir.current = true }, [unidadSeleccionada])
+  const seguida = unidadSeleccionada == null ? undefined : datos?.vehiculos.find(v => v.id === unidadSeleccionada)
+  useEffect(() => {
+    const rect = area.current?.getBoundingClientRect()
+    if (!seguida || !seguir.current || !rect || arrastre.current) return
+    ultimoObjetivo.current = { x: seguida.x, y: seguida.y }
+    setCamara(c => centrarCamara(c, seguida, rect.width, rect.height))
+  }, [seguida?.x, seguida?.y])
   useEffect(() => {
     const nodo = area.current
     if (!nodo) return
     let ancho = nodo.clientWidth, alto = nodo.clientHeight
+    setAnchoArea(ancho)
     const observador = new ResizeObserver(() => {
       const nuevoAncho = nodo.clientWidth, nuevoAlto = nodo.clientHeight
+      setAnchoArea(nuevoAncho)
       if (ancho === nuevoAncho && alto === nuevoAlto) return
       ancho = nuevoAncho; alto = nuevoAlto
       const objetivo = ultimoObjetivo.current
@@ -98,7 +113,7 @@ export function MapaOperativo({ state, highlightOrderId, full = false, replanned
   const fondoLuz=(luz:string)=>luz==='vacío'?'bg-slate-500':luz==='verde'?'bg-emerald-600':luz==='ámbar'?'bg-amber-600':luz==='rojo'?'bg-red-700':'bg-slate-400'
   return <div ref={area} className={`${full ? 'absolute inset-0' : 'relative min-h-[480px]'} overflow-hidden bg-[#e9eef0]`} onWheel={e => { e.preventDefault(); const rect = e.currentTarget.getBoundingClientRect(); zoom(e.deltaY < 0 ? 1.15 : 1 / 1.15, { x: e.clientX - rect.left, y: e.clientY - rect.top }) }}
     onPointerDown={e => { if (e.button !== 0 || (e.target as HTMLElement).closest('button, [data-map-marker]')) return; arrastre.current = { x: e.clientX, y: e.clientY, origenX: camara.x, origenY: camara.y }; e.currentTarget.setPointerCapture(e.pointerId) }}
-    onPointerMove={e => { const a = arrastre.current; if (!a) return; const rect = e.currentTarget.getBoundingClientRect(); setCamara(c => limitarCamara(a.origenX + e.clientX - a.x, a.origenY + e.clientY - a.y, c.escala, rect.width, rect.height)) }}
+    onPointerMove={e => { const a = arrastre.current; if (!a) return; if (Math.abs(e.clientX - a.x) + Math.abs(e.clientY - a.y) > 4) seguir.current = false; const rect = e.currentTarget.getBoundingClientRect(); setCamara(c => limitarCamara(a.origenX + e.clientX - a.x, a.origenY + e.clientY - a.y, c.escala, rect.width, rect.height)) }}
     onPointerUp={() => { arrastre.current = null }} onPointerCancel={() => { arrastre.current = null }}>
     <div className="absolute inset-0 origin-top-left" style={{ transform: `translate(${camara.x}px, ${camara.y}px) scale(${camara.escala})`, transition: arrastre.current ? 'none' : 'transform 120ms ease-out' }}>
     <svg className="absolute inset-0 size-full" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
@@ -119,10 +134,10 @@ export function MapaOperativo({ state, highlightOrderId, full = false, replanned
     {!full && <div className="absolute left-4 top-4 bg-white/90 px-3 py-2 text-xs font-bold text-slate-700 shadow"><MapPin className="mr-2 inline size-4 text-blue-600" />Origen (0,0) abajo-izquierda · Cuadrícula 1 km · 70 × 50 km</div>}
 
     {/* Almacenes: barra y % de existencias disponibles (el central es ilimitado) y unidades estacionadas en su base */}
-    {almacenes.filter(a => ctx.filtros.luzAlmacen==='todos' || (a.central?'no disponible':a.pct==null?'no disponible':tonoStock(a.pct,u.stock).replace('ambar','ámbar'))===ctx.filtros.luzAlmacen).map(a => <button type="button" data-map-marker key={a.nombre} title={`${a.nombre} (${a.x},${a.y}) · ${a.central ? 'existencias ilimitadas' : a.pct == null ? 'existencias no disponibles' : `existencias ${a.pct}%`}${onWarehouse ? ' · clic para ver detalle' : ''}`} onClick={() => {ctx.setEnfoque({x:a.x,y:a.y,clave:Date.now()});ctx.setPanelActivo('almacenes');onWarehouse?.(a.nombre)}} className={`absolute flex flex-col items-center ${onWarehouse ? 'cursor-pointer' : ''}`} style={pos(a.x, a.y)}>
+    {almacenes.filter(a => ctx.filtros.luzAlmacen==='todos' || (a.central?'no disponible':a.pct==null?'no disponible':tonoStock(a.pct,u.stock).replace('ambar','ámbar'))===ctx.filtros.luzAlmacen).map(a => <button type="button" data-map-marker key={a.nombre} title={`${a.nombre} (${a.x},${a.y}) · ${a.central ? 'existencias ilimitadas' : a.pct == null ? 'existencias no disponibles' : `existencias ${a.pct}%`}${onWarehouse ? ' · clic para ver detalle' : ''}`} onClick={() => {if(a.nombre===almacenMarcado){if(ctx.panelActivo==='almacenes')ctx.setPanelActivo(null);onWarehouse?.(null);return}ctx.setEnfoque({x:a.x,y:a.y,clave:Date.now()});ctx.setPanelActivo('almacenes');onWarehouse?.(a.nombre)}} className={`absolute flex flex-col items-center ${onWarehouse ? 'cursor-pointer' : ''}`} style={pos(a.x, a.y)}>
       <div className={`flex size-8 items-center justify-center border-2 border-white shadow-md ${a.nombre === almacenMarcado ? 'animate-pulse ring-4 ring-blue-500' : 'ring-1 ring-slate-300'} ${a.central ? 'bg-blue-700' : a.pct == null ? 'bg-slate-400' : CLASE_SEMAFORO[tonoStock(a.pct,u.stock)]} text-white`}><Warehouse className="size-4" /></div>
       {a.pct != null && <div className="mt-1 h-1.5 w-12 bg-white ring-1 ring-slate-300"><div className={`h-full ${CLASE_SEMAFORO[tonoStock(a.pct, u.stock)]}`} style={{ width: `${a.pct}%` }} /></div>}
-      <span className="mt-1 block whitespace-nowrap bg-white/90 px-1.5 py-0.5 text-[10px] font-bold text-slate-700 shadow-sm">{a.nombre} · {a.central ? <span className="text-blue-700">∞</span> : a.pct == null ? 'existencias no disponibles' : <span className={TEXTO_SEMAFORO[tonoStock(a.pct, u.stock)]}>stock {a.pct}%</span>}</span>
+      <span className="mt-1 block whitespace-nowrap bg-white/90 px-1.5 py-0.5 text-[10px] font-bold text-slate-700 shadow-sm">{a.nombre} · {a.central ? <span className="text-blue-700">∞</span> : a.pct == null ? 'existencias no disponibles' : <span className={TEXTO_SEMAFORO[tonoStock(a.pct, u.stock)]}>inventario {a.pct}%</span>}</span>
       {a.enBase != null && <span className="block whitespace-nowrap bg-white/90 px-1.5 text-[10px] font-semibold text-slate-500 shadow-sm">{a.enBase} UT en base</span>}
     </button>)}
 
@@ -133,18 +148,18 @@ export function MapaOperativo({ state, highlightOrderId, full = false, replanned
       return <div key={identificadorGrupo} className="pointer-events-none absolute z-[2] [&_button]:pointer-events-auto" style={{...pos(v.x, v.y),marginLeft:sobreAlmacen?44/camara.escala:0}}>
         {sobreAlmacen&&<span aria-hidden="true" className="absolute top-4 w-11 border-t border-slate-600" style={{left:'50%',transform:'translateX(-44px)'}}/>}
         <div className="relative mx-auto w-fit">
-        <button type="button" onClick={() => {if(unidades.length===1){ctx.setRutasConsulta([]);ctx.setRutaProducto(null);ctx.setPanelActivo('flota');onUnidad?.(v.id)}else setGrupo(grupo === identificadorGrupo ? null : identificadorGrupo)}} title={unidades.map(q => `${q.codigo} · carga ${q.carga}/${q.capacidad} · ${estadoEnEspanol(q.estado)} · ${q.ocupacionPct == null ? 'ocupación no disponible' : `${q.ocupacionPct}% · ${luzOcupacion(q.ocupacionPct, q.capacidad, ctx.limites)}`}`).join('\n')} aria-label={unidades.length > 1 ? `${unidades.length} unidades en (${v.x}, ${v.y})` : `${v.codigo} · carga ${v.carga}/${v.capacidad} · ${estadoEnEspanol(v.estado)} · ${categoria}`} className={`mx-auto flex min-h-9 min-w-9 items-center justify-center rounded-full border-2 border-white px-1 font-bold text-white shadow ${unidades.some(q => q.id === unidadSeleccionada) ? 'ring-4 ring-blue-400' : ''} ${unidades.length > 1 ? 'bg-slate-700' : averiadas.has(v.id) ? colorAveria(v.id) : fondoLuz(categoria)}`}>
+        <button type="button" onClick={() => {if(unidades.length===1){ctx.setRutasConsulta([]);ctx.setRutaProducto(null);if(unidadSeleccionada===v.id){ctx.setPanelActivo(null);onUnidad?.(null)}else{ctx.setPanelActivo('flota');onUnidad?.(v.id)}}else setGrupo(grupo === identificadorGrupo ? null : identificadorGrupo)}} title={unidades.map(q => `${q.codigo} · carga ${q.carga}/${q.capacidad} · ${estadoEnEspanol(q.estado)} · ${q.ocupacionPct == null ? 'ocupación no disponible' : `${q.ocupacionPct}% · ${luzOcupacion(q.ocupacionPct, q.capacidad, ctx.limites)}`}`).join('\n')} aria-label={unidades.length > 1 ? `${unidades.length} unidades en (${v.x}, ${v.y})` : `${v.codigo} · carga ${v.carga}/${v.capacidad} · ${estadoEnEspanol(v.estado)} · ${categoria}`} className={`mx-auto flex min-h-9 min-w-9 items-center justify-center rounded-full border-2 border-white px-1 font-bold text-white shadow ${unidades.some(q => q.id === unidadSeleccionada) ? 'ring-4 ring-blue-400' : ''} ${unidades.length > 1 ? 'bg-slate-700' : averiadas.has(v.id) ? colorAveria(v.id) : fondoLuz(categoria)}`}>
           {unidades.length > 1 ? unidades.length : <Icono className="size-4" />}
         </button>
         {unidades.length === 1 && v.direccion != null && <span aria-label="Dirección del tramo" className="absolute left-full top-1/2 ml-0.5 leading-none text-blue-900" style={{ transform: `translateY(-50%) rotate(${v.direccion}deg)` }}>➜</span>}
         </div>
-        {averiasGrupo.length>0&&<div className="mt-1 flex flex-wrap justify-center gap-1" aria-label="Averías visibles">{averiasGrupo.map(q=><button key={q.id} onClick={()=>{ctx.setPanelActivo('flota');onUnidad?.(q.id)}} title={`${q.codigo} · avería tipo ${tipoAveria(q.id)??'desconocido'}`} aria-label={`Enfocar avería tipo ${tipoAveria(q.id)??'desconocido'} de ${q.codigo}`} className={`flex min-h-6 items-center gap-1 rounded border-2 border-white px-1 text-[10px] font-bold text-white shadow ring-1 ring-slate-900 ${colorAveria(q.id)}`}><Wrench className="size-3"/>A{tipoAveria(q.id)??'?'}{unidades.length>1?` ${q.codigo}`:''}</button>)}</div>}
+        {averiasGrupo.length>0&&<div className="mt-1 flex flex-wrap justify-center gap-1" aria-label="Averías visibles">{averiasGrupo.map(q=><button key={q.id} onClick={()=>{if(unidadSeleccionada===q.id){ctx.setPanelActivo(null);onUnidad?.(null)}else{ctx.setPanelActivo('flota');onUnidad?.(q.id)}}} title={`${q.codigo} · avería tipo ${tipoAveria(q.id)??'desconocido'}`} aria-label={`Enfocar avería tipo ${tipoAveria(q.id)??'desconocido'} de ${q.codigo}`} className={`flex min-h-6 items-center gap-1 rounded border-2 border-white px-1 text-[10px] font-bold text-white shadow ring-1 ring-slate-900 ${colorAveria(q.id)}`}><Wrench className="size-3"/>A{tipoAveria(q.id)??'?'}{unidades.length>1?` ${q.codigo}`:''}</button>)}</div>}
         <span className={`block whitespace-nowrap bg-white/90 px-1 text-[10px] font-bold shadow ${sobreAlmacen&&averiasGrupo.length===0?'mt-7':''} ${unidades.length > 1 ? 'text-slate-700' : categoria === 'verde' ? 'text-emerald-700' : categoria === 'ámbar' ? 'text-amber-700' : categoria === 'rojo' ? 'text-red-700' : 'text-slate-600'}`}>{unidades.length > 1 ? 'Unidades' : `${v.codigo} · ${v.ocupacionPct == null ? 'ocupación no disponible' : `${v.ocupacionPct}% · ${categoria}`} · ${estadoEnEspanol(v.estado)}`}</span>
         {grupo === identificadorGrupo && <div className={`pointer-events-auto absolute ${v.x > 50 ? 'right-0' : 'left-0'} ${v.y < 25 ? 'bottom-full' : 'top-full'} z-20 max-h-48 w-48 overflow-y-auto border bg-white p-2 text-xs shadow-lg`}><p className="font-bold">Unidades en ({v.x}, {v.y})</p>{unidades.map(q => <button key={q.id} onClick={() => {ctx.setRutasConsulta([]);ctx.setRutaProducto(null);ctx.setPanelActivo('flota');onUnidad?.(q.id);setGrupo(null)}} className="block w-full border-b py-1 text-left">{q.codigo} · {ETIQUETA_TIPO[q.tipo]} · {q.carga}/{q.capacidad} · {q.ocupacionPct == null ? 'ocupación no disponible' : `${q.ocupacionPct}% ${luzOcupacion(q.ocupacionPct, q.capacidad, ctx.limites)}`} · {estadoEnEspanol(q.estado)}</button>)}<button onClick={() => setGrupo(null)} className="mt-1 border px-2 py-1">Cerrar</button></div>}
       </div>
     })}
 
-    {datos.pedidos.map(pe => { const esBuscado = pe.codigo === buscado; return <div data-map-marker key={pe.id} onClick={() => {ctx.setRutasConsulta([]);ctx.setRutaProducto(null);onPedido?.(pe.codigo)}} title={`${pe.codigo} · destino (${pe.x},${pe.y}) · ${pe.cantidad} u · ${ETIQUETA_ESTADO[pe.estado]}${pe.margenH != null ? ` · margen ${pe.margenH.toFixed(1)} h` : ''}${onPedido ? ' · clic para ver la ficha' : ''}`} style={pos(pe.x, pe.y, 7)} className={`absolute ${onPedido ? 'cursor-pointer' : ''} ${esBuscado ? 'z-[5]' : ''}`}>
+    {datos.pedidos.map(pe => { const esBuscado = pe.codigo === buscado; return <div data-map-marker key={pe.id} onClick={() => {ctx.setRutasConsulta([]);ctx.setRutaProducto(null);onPedido?.(buscado===pe.codigo?null:pe.codigo)}} title={`${pe.codigo} · destino (${pe.x},${pe.y}) · ${pe.cantidad} u · ${ETIQUETA_ESTADO[pe.estado]}${pe.margenH != null ? ` · margen ${pe.margenH.toFixed(1)} h` : ''}${onPedido ? ' · clic para ver la ficha' : ''}`} style={pos(pe.x, pe.y, 7)} className={`absolute ${onPedido ? 'cursor-pointer' : ''} ${esBuscado ? 'z-[5]' : ''}`}>
       <div className="relative mx-auto size-3.5">{esBuscado && <div className="absolute -inset-1.5 animate-ping rounded-full bg-blue-500/60" />}<div className={`relative size-3.5 rounded-full border-2 shadow-md ${esBuscado ? 'border-blue-700 ring-2 ring-blue-500' : 'border-white'} ${CLASE_SEMAFORO[semaforo(pe.margenH, u.pedido)]}`} /></div>
       {(esBuscado || datos.pedidos.length <= 40) && <span className={`mt-1 block whitespace-nowrap px-1 text-[10px] font-bold shadow-sm ${esBuscado ? 'bg-blue-700 text-white' : 'bg-white/90 text-slate-700'}`}>{pe.codigo}</span>}
     </div> })}
@@ -159,7 +174,16 @@ export function MapaOperativo({ state, highlightOrderId, full = false, replanned
     </div>
     <div className="absolute bottom-16 left-1/2 z-[8] flex -translate-x-1/2 gap-1 md:bottom-3" aria-label="Controles del mapa"><button onClick={() => zoom(1.25)} aria-label="Ampliar mapa" className="border bg-white px-3 py-2 font-bold shadow">+</button><button onClick={() => zoom(1 / 1.25)} aria-label="Reducir mapa" className="border bg-white px-3 py-2 font-bold shadow">−</button><button onClick={() => setCamara({ escala: 1, x: 0, y: 0 })} className="border bg-white px-2 py-2 text-xs font-bold shadow">Ajustar mapa</button></div>
     <Leyenda full={full} real={!!datos} incident={datos ? hayBloqueo : incident || replanned || isCollapse} averia={averiadas.size > 0} collapse={isCollapse} buscado={!!buscado} />
-    {datos.planAplicable===false&&datos.rutas.some(r=>r.pendientePlan)&&<p className="pointer-events-none absolute left-1/2 top-2 z-[4] max-w-[70%] -translate-x-1/2 rounded-lg border border-amber-200 bg-amber-50/95 px-3 py-1.5 text-[11px] text-amber-900">Líneas ámbar discontinuas: plan con pedidos pendientes de asignación o actualización. La posición proviene del estado físico.</p>}
+    {/* Zona de avisos: en el espacio libre entre los controles de la izquierda (Panel de control /
+        Ver estado) y los de la derecha (buscador y acciones). Si no cabe, baja debajo de ellos. */}
+    {avisoExtra && (() => {
+      const cabe = anchoArea - reservaIzquierda - reservaDerecha >= 280
+      return <div role="status" aria-live="polite" className="pointer-events-none absolute z-[9] flex justify-center" style={cabe ? { top: 12, left: reservaIzquierda, right: reservaDerecha } : { top: 112, left: 12, right: 12 }}>
+        <div className="flex max-w-[34rem] flex-col items-stretch gap-1.5">
+          {avisoExtra && <div className="pointer-events-auto rounded-lg border border-amber-300 bg-amber-50/95 px-3 py-1.5 text-xs font-semibold text-amber-800 shadow">{avisoExtra}</div>}
+        </div>
+      </div>
+    })()}
   </div>
 }
 
@@ -181,7 +205,7 @@ function Leyenda({ full, real, incident, averia = false, collapse, buscado }: { 
         <span className={titulo}>Almacenes</span>
         <span className={item}><span className="inline-block size-3 border-2 border-white bg-blue-700 shadow" />Central · existencias ilimitadas</span>
         <span className={item}><span className="inline-block size-3 border-2 border-white bg-slate-700 shadow" />Intermedio</span>
-        <span className={item}><span className="flex h-1.5 w-8 bg-white ring-1 ring-slate-300"><span className="h-full w-1/3 bg-emerald-600" /><span className="h-full w-1/3 bg-amber-500" /><span className="h-full w-1/3 bg-red-600" /></span>Vacío = 0 %. Stock disponible: verde ≥ {u.stock.verde} % · ámbar · rojo &lt; {u.stock.rojo} %</span>
+        <span className={item}><span className="flex h-1.5 w-8 bg-white ring-1 ring-slate-300"><span className="h-full w-1/3 bg-emerald-600" /><span className="h-full w-1/3 bg-amber-500" /><span className="h-full w-1/3 bg-red-600" /></span>Vacío = 0 %. Inventario disponible: verde ≥ {u.stock.verde} % · ámbar · rojo &lt; {u.stock.rojo} %</span>
         {real && <span className={item}><b>N vehículos en base</b> = unidades estacionadas, sin ruta</span>}
       </div>
       <div className="flex flex-wrap gap-x-3 gap-y-1">
@@ -189,6 +213,7 @@ function Leyenda({ full, real, incident, averia = false, collapse, buscado }: { 
         {(Object.keys(ETIQUETA_TIPO) as TipoVehiculo[]).map(t => <span key={t} className={item}><span className={`inline-block size-3 rounded-full ${CLASE_TIPO[t]}`} /><span className="inline-block h-0.5 w-4" style={{ background: COLOR_TIPO[t] }} />{ETIQUETA_TIPO[t]}</span>)}
         <span className={item}>Iconos UT: vacío gris · verde &lt; {ctx.limites.verde}% · ámbar &lt; {ctx.limites.rojo}% · rojo resto</span>
         <span className={item}><span className="inline-block h-0 w-5 border-t-2 border-dashed border-slate-400" />{real ? 'Tramo ya recorrido' : 'Ruta anterior'}</span>
+        {real && <span className={item}><span className="inline-block h-0 w-5 border-t-2 border-dashed border-amber-700" />Ámbar discontinua: ruta en replanificación</span>}
         {ctx.rutasConsulta.length>0&&<span className={item}>Rutas consultadas: trazados registrados; pueden pertenecer a planes anteriores.</span>}
       </div>
       <div className="flex flex-wrap gap-x-3 gap-y-1">
