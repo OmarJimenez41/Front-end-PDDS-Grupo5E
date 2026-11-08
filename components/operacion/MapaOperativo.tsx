@@ -70,10 +70,21 @@ export function MapaOperativo({ state, highlightOrderId, full = false, replanned
   // La coordenada ancla el centro del icono, no el centro del bloque que incluye su etiqueta.
   const pos = (x: number, y: number, radio = 16) => ({ left: `${x / 70 * 100}%`, top: `${100 - y / 50 * 100}%`, transform: `translate(-50%, -${radio}px) scale(${1 / camara.escala})`, transformOrigin: `50% ${radio}px` })
   const objetivo = buscado ? datos.rastreo.find(q => q.codigo === buscado) ?? null : null
-  const almacenes=datos.almacenes.filter(a=>almacenCumple(a,ctx.filtros,u.stock)).map(a=>({nombre:NOMBRE_ALMACEN[a.codigo]??a.codigo,x:a.x,y:a.y,central:a.central,pct:a.pct,enBase:a.vehiculosEnBase as number|null}))
   const averiadas = new Set(datos?.flota.filter(v => v.averiada).map(v => v.id))
+  const flotaPorId = new globalThis.Map(datos.flota.map(f => [f.id, f]))
+  // Unidad libre, sin ruta ni servicio: no se dibuja. Si está en un almacén se cuenta en su etiqueta;
+  // si quedó fuera de uno, se consulta en el panel de flota. Sin estado del servidor se deduce de la flota.
+  const libre = (v: MapaDatos['vehiculos'][number]) => {
+    if (v.estado) return v.estado === 'EN_BASE'
+    const f = flotaPorId.get(v.id)
+    return !!f && f.disponible && !f.enRuta && !f.averiada && v.carga === 0
+  }
+  const almacenesFiltrados = datos.almacenes.filter(a=>almacenCumple(a,ctx.filtros,u.stock))
+  const almacenes=almacenesFiltrados.map(a=>({nombre:NOMBRE_ALMACEN[a.codigo]??a.codigo,x:a.x,y:a.y,central:a.central,pct:a.pct,
+    enBase:datos.vehiculos.filter(v=>libre(v)&&Math.round(v.x)===a.x&&Math.round(v.y)===a.y).length}))
   const hayBloqueo = !!datos?.incidencias.some(i => i.tipo === 'BLOQUEO')
   const filtradas = datos.vehiculos.filter(v => {
+    if(libre(v)&&v.id!==unidadSeleccionada)return false
     const unidad=ctx.unidades?.unidades.find(u=>u.id===v.id)
     if(unidad)return unidadCumple(unidad,ctx.filtros,ctx.mapa,ctx.limites)
     const ruta=ctx.mapa?.plan?.rutas.find(r=>r.vehiculoId===v.id&&r.horaFinH>datos.relojH)
@@ -119,18 +130,18 @@ export function MapaOperativo({ state, highlightOrderId, full = false, replanned
     {!full && <div className="absolute left-4 top-4 bg-white/90 px-3 py-2 text-xs font-bold text-slate-700 shadow"><MapPin className="mr-2 inline size-4 text-blue-600" />Origen (0,0) abajo-izquierda · Cuadrícula 1 km · 70 × 50 km</div>}
 
     {/* Almacenes: barra y % de existencias disponibles (el central es ilimitado) y unidades estacionadas en su base */}
-    {almacenes.filter(a => ctx.filtros.luzAlmacen==='todos' || (a.central?'no disponible':a.pct==null?'no disponible':tonoStock(a.pct,u.stock).replace('ambar','ámbar'))===ctx.filtros.luzAlmacen).map(a => <button type="button" data-map-marker key={a.nombre} title={`${a.nombre} (${a.x},${a.y}) · ${a.central ? 'existencias ilimitadas' : a.pct == null ? 'existencias no disponibles' : `existencias ${a.pct}%`}${onWarehouse ? ' · clic para ver detalle' : ''}`} onClick={() => {ctx.setEnfoque({x:a.x,y:a.y,clave:Date.now()});ctx.setPanelActivo('almacenes');onWarehouse?.(a.nombre)}} className={`absolute flex flex-col items-center ${onWarehouse ? 'cursor-pointer' : ''}`} style={pos(a.x, a.y)}>
+    {almacenes.filter(a => ctx.filtros.luzAlmacen==='todos' || (a.central?'no disponible':a.pct==null?'no disponible':tonoStock(a.pct,u.stock).replace('ambar','ámbar'))===ctx.filtros.luzAlmacen).map(a => <button type="button" data-map-marker key={a.nombre} title={`${a.nombre} (${a.x},${a.y}) · ${a.central ? 'existencias ilimitadas' : a.pct == null ? 'existencias no disponibles' : `existencias ${a.pct}%`}${onWarehouse ? ' · clic para ver detalle' : ''}`} onClick={() => {ctx.setEnfoque({x:a.x,y:a.y,clave:Date.now()});ctx.setPanelActivo('almacenes');onWarehouse?.(a.nombre)}} className={`absolute z-[3] flex flex-col items-center ${onWarehouse ? 'cursor-pointer' : ''}`} style={pos(a.x, a.y)}>
       <div className={`flex size-8 items-center justify-center border-2 border-white shadow-md ${a.nombre === almacenMarcado ? 'animate-pulse ring-4 ring-blue-500' : 'ring-1 ring-slate-300'} ${a.central ? 'bg-blue-700' : a.pct == null ? 'bg-slate-400' : CLASE_SEMAFORO[tonoStock(a.pct,u.stock)]} text-white`}><Warehouse className="size-4" /></div>
       {a.pct != null && <div className="mt-1 h-1.5 w-12 bg-white ring-1 ring-slate-300"><div className={`h-full ${CLASE_SEMAFORO[tonoStock(a.pct, u.stock)]}`} style={{ width: `${a.pct}%` }} /></div>}
       <span className="mt-1 block whitespace-nowrap bg-white/90 px-1.5 py-0.5 text-[10px] font-bold text-slate-700 shadow-sm">{a.nombre} · {a.central ? <span className="text-blue-700">∞</span> : a.pct == null ? 'existencias no disponibles' : <span className={TEXTO_SEMAFORO[tonoStock(a.pct, u.stock)]}>stock {a.pct}%</span>}</span>
-      {a.enBase != null && <span className="block whitespace-nowrap bg-white/90 px-1.5 text-[10px] font-semibold text-slate-500 shadow-sm">{a.enBase} UT en base</span>}
+      {a.enBase > 0 && <span className="block whitespace-nowrap bg-white/90 px-1.5 text-[10px] font-semibold text-slate-500 shadow-sm">{a.enBase} UT en base</span>}
     </button>)}
 
     {[...grupos.entries()].map(([clave, unidades]) => { const v = unidades[0]; const Icono = v.tipo === 'AUTO' ? Car : v.tipo === 'MOTO' ? Motorbike : Bike; const categoria = luzOcupacion(v.ocupacionPct ?? null, v.capacidad, ctx.limites)
       const averiasGrupo=unidades.filter(q=>averiadas.has(q.id))
       const identificadorGrupo=unidades.map(u=>u.id).sort((a,b)=>a-b).join('-')
       const sobreAlmacen=datos.almacenes.some(a=>a.x===v.x&&a.y===v.y)
-      return <div key={identificadorGrupo} className="pointer-events-none absolute z-[2] [&_button]:pointer-events-auto" style={{...pos(v.x, v.y),marginLeft:sobreAlmacen?44/camara.escala:0}}>
+      return <div key={identificadorGrupo} className={`pointer-events-none absolute ${grupo === identificadorGrupo ? 'z-[6]' : 'z-[2]'} [&_button]:pointer-events-auto`} style={{...pos(v.x, v.y),marginLeft:sobreAlmacen?44/camara.escala:0}}>
         {sobreAlmacen&&<span aria-hidden="true" className="absolute top-4 w-11 border-t border-slate-600" style={{left:'50%',transform:'translateX(-44px)'}}/>}
         <div className="relative mx-auto w-fit">
         <button type="button" onClick={() => {if(unidades.length===1){ctx.setRutasConsulta([]);ctx.setRutaProducto(null);ctx.setPanelActivo('flota');onUnidad?.(v.id)}else setGrupo(grupo === identificadorGrupo ? null : identificadorGrupo)}} title={unidades.map(q => `${q.codigo} · carga ${q.carga}/${q.capacidad} · ${estadoEnEspanol(q.estado)} · ${q.ocupacionPct == null ? 'ocupación no disponible' : `${q.ocupacionPct}% · ${luzOcupacion(q.ocupacionPct, q.capacidad, ctx.limites)}`}`).join('\n')} aria-label={unidades.length > 1 ? `${unidades.length} unidades en (${v.x}, ${v.y})` : `${v.codigo} · carga ${v.carga}/${v.capacidad} · ${estadoEnEspanol(v.estado)} · ${categoria}`} className={`mx-auto flex min-h-9 min-w-9 items-center justify-center rounded-full border-2 border-white px-1 font-bold text-white shadow ${unidades.some(q => q.id === unidadSeleccionada) ? 'ring-4 ring-blue-400' : ''} ${unidades.length > 1 ? 'bg-slate-700' : averiadas.has(v.id) ? colorAveria(v.id) : fondoLuz(categoria)}`}>
@@ -159,6 +170,10 @@ export function MapaOperativo({ state, highlightOrderId, full = false, replanned
     </div>
     <div className="absolute bottom-16 left-1/2 z-[8] flex -translate-x-1/2 gap-1 md:bottom-3" aria-label="Controles del mapa"><button onClick={() => zoom(1.25)} aria-label="Ampliar mapa" className="border bg-white px-3 py-2 font-bold shadow">+</button><button onClick={() => zoom(1 / 1.25)} aria-label="Reducir mapa" className="border bg-white px-3 py-2 font-bold shadow">−</button><button onClick={() => setCamara({ escala: 1, x: 0, y: 0 })} className="border bg-white px-2 py-2 text-xs font-bold shadow">Ajustar mapa</button></div>
     <Leyenda full={full} real={!!datos} incident={datos ? hayBloqueo : incident || replanned || isCollapse} averia={averiadas.size > 0} collapse={isCollapse} buscado={!!buscado} />
+    {almacenesFiltrados.length<datos.almacenes.length&&<p className="absolute right-3 top-3 z-[7] flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50/95 px-3 py-1.5 text-[11px] font-semibold text-blue-900 shadow">
+      <Warehouse className="size-3.5"/>Mostrando {almacenesFiltrados.length} de {datos.almacenes.length} almacenes por un filtro activo
+      <button type="button" onClick={()=>ctx.setFiltros({...ctx.filtros,almacen:'todos',patronAlmacen:'',zonaAlmacen:'todos',luzAlmacen:'todos'})} className="font-bold text-blue-700 underline">Mostrar todos</button>
+    </p>}
     {datos.planAplicable===false&&datos.rutas.some(r=>r.pendientePlan)&&<p className="pointer-events-none absolute left-1/2 top-2 z-[4] max-w-[70%] -translate-x-1/2 rounded-lg border border-amber-200 bg-amber-50/95 px-3 py-1.5 text-[11px] text-amber-900">Líneas ámbar discontinuas: plan con pedidos pendientes de asignación o actualización. La posición proviene del estado físico.</p>}
   </div>
 }
@@ -182,7 +197,7 @@ function Leyenda({ full, real, incident, averia = false, collapse, buscado }: { 
         <span className={item}><span className="inline-block size-3 border-2 border-white bg-blue-700 shadow" />Central · existencias ilimitadas</span>
         <span className={item}><span className="inline-block size-3 border-2 border-white bg-slate-700 shadow" />Intermedio</span>
         <span className={item}><span className="flex h-1.5 w-8 bg-white ring-1 ring-slate-300"><span className="h-full w-1/3 bg-emerald-600" /><span className="h-full w-1/3 bg-amber-500" /><span className="h-full w-1/3 bg-red-600" /></span>Vacío = 0 %. Stock disponible: verde ≥ {u.stock.verde} % · ámbar · rojo &lt; {u.stock.rojo} %</span>
-        {real && <span className={item}><b>N vehículos en base</b> = unidades estacionadas, sin ruta</span>}
+        {real && <span className={item}><b>N UT en base</b> = unidades libres en ese almacén. Las unidades sin ruta no se dibujan; se consultan en Flota</span>}
       </div>
       <div className="flex flex-wrap gap-x-3 gap-y-1">
         <span className={titulo}>Rutas por tipo de vehículo</span>
