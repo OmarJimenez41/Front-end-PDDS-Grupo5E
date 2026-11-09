@@ -2,6 +2,13 @@ import type { Arista, InstantaneaOperacion } from '../api/operacion'
 
 type Punto = { x: number; y: number }
 
+/** Un refresco del plan en el mismo instante no descarta el intervalo físico en animación. */
+export function origenParaAnimacion(anterior: InstantaneaOperacion|null, actual: InstantaneaOperacion|null, origen: InstantaneaOperacion|null) {
+  return anterior && actual && origen && anterior.escenarioId === actual.escenarioId &&
+    origen.escenarioId === actual.escenarioId && anterior.relojH === actual.relojH &&
+    origen.relojH < actual.relojH ? origen : anterior
+}
+
 /** Evalúa solo una trayectoria continua y ordenada; los huecos representan esperas. */
 export function puntoCertificado(aristas: Arista[], hora: number): Punto | null {
   if (!aristas.length) return null

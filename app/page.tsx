@@ -43,7 +43,7 @@ const horaSimulada = (h: number) => { const m = Math.round(h * 60); return `día
 const fechaDesdeBase = (base: string, h: number) => { const [a, m, d] = base.split('-').map(Number); const t = new Date(Date.UTC(a, m - 1, d) + Math.round(h * 60) * 60000); const p = (n: number) => String(n).padStart(2, '0'); return `${p(t.getUTCDate())}/${p(t.getUTCMonth() + 1)}/${t.getUTCFullYear()} · ${p(t.getUTCHours())}:${p(t.getUTCMinutes())}` }
 const duracion = (seg: number) => { const s = Math.max(0, Math.floor(seg)); const p = (n: number) => String(n).padStart(2, '0'); return `${p(Math.floor(s / 3600))}:${p(Math.floor(s / 60) % 60)}:${p(s % 60)}` }
 /** Estimación del tiempo real ejecutado según el reloj del back-end (horas simuladas ÷ ritmo); solo sirve de punto de partida. */
-const tiempoReal = (sim: VistaSimulacion) => sim.simulacion.factor > 0 ? (sim.simulacion.relojH - sim.simulacion.inicioH) * 3600 / sim.simulacion.factor : 0
+const tiempoReal = (sim: VistaSimulacion) => sim.simulacion.segundosEjecutados ?? 0
 const porcentaje = (parte: number, total: number) => total > 0 ? `${Math.round(parte / total * 100)}%` : '—'
 const simViva = (sim: VistaSimulacion | null) => sim?.simulacion.estado === 'EJECUTANDO' || sim?.simulacion.estado === 'PAUSADA'
 
@@ -304,17 +304,16 @@ function EscenarioTabs({ scenario, bloqueadas, onCambiar }: { scenario: Scenario
 }
 
 // Contenido de la pestaña elegida: el día a día no se inicia (siempre está activo); cada simulación se configura e inicia
-function ScenarioSelect({scenario,onStart}:{scenario:Scenario;onStart:(tipo:SimType,start:string,duracion?:number)=>Promise<void>}){
- const ctx=useV9(),[start,setStart]=useState('2026-09-08T08:00'),[duracion,setDuracion]=useState(45),[starting,setStarting]=useState(false),[error,setError]=useState(''),[coverage,setCoverage]=useState<Cobertura|null>(null),[revision,setRevision]=useState(0)
+function ScenarioSelect({scenario,onStart}:{scenario:Scenario;onStart:(tipo:SimType,start:string)=>Promise<void>}){
+ const ctx=useV9(),[start,setStart]=useState('2026-09-08T08:00'),[starting,setStarting]=useState(false),[error,setError]=useState(''),[coverage,setCoverage]=useState<Cobertura|null>(null),[revision,setRevision]=useState(0)
  useEffect(()=>{const actualizar=()=>setRevision(n=>n+1);window.addEventListener('paqrap:datos-actualizados',actualizar);return()=>window.removeEventListener('paqrap:datos-actualizados',actualizar)},[])
  useEffect(()=>{if(scenario==='day'||!start)return;let vivo=true;setCoverage(null);const t=setTimeout(()=>{validarCobertura(start).then(c=>{if(vivo){setCoverage(c);setError('')}}).catch(e=>{if(vivo)setError(mensajeError(e))})},300);return()=>{vivo=false;clearTimeout(t)}},[scenario,start,revision])
- const iniciar=async()=>{setStarting(true);setError('');try{await onStart(scenario as SimType,start,duracion)}catch(e){setError(mensajeError(e))}finally{setStarting(false)}}
+ const iniciar=async()=>{setStarting(true);setError('');try{await onStart(scenario as SimType,start)}catch(e){setError(mensajeError(e))}finally{setStarting(false)}}
  if(scenario==='day')return <section className="rounded-xl bg-blue-50 p-3 text-xs leading-relaxed text-slate-600"><h3 className="font-bold text-slate-900">Operación día a día</h3><p className="mt-1">Sigue los pedidos registrados en tiempo real. Usa Flota, Almacenes, Envíos e Incidencias para consultar y operar.</p></section>
- const bloqueado=starting||!start||!coverage||(scenario==='five'&&coverage.faltantes.length>0)||duracion<1||duracion>600
+ const bloqueado=starting||!start||!coverage||(scenario==='five'&&coverage.faltantes.length>0)
  return <section className="space-y-4 text-xs"><div><h3 className="text-base font-bold">{scenario==='five'?'Simulación de cinco días':'Hasta el colapso'}</h3><p className="mt-1 leading-relaxed text-slate-500">{scenario==='five'?'El servidor consume el periodo elegido y conserva el reporte final.':'Finaliza al producirse un colapso operativo; la falta de datos se informa como un motivo distinto.'}</p></div>
  <label className="block font-semibold">Fecha y hora de inicio<input type="datetime-local" step="60" className="mt-1 block w-full rounded-xl border p-2.5 font-normal" value={start} onChange={e=>setStart(e.target.value)}/></label>
- <label className="block font-semibold">Duración real de referencia (minutos)<input aria-label="Duración real de referencia" type="number" min="1" max="600" value={duracion} onChange={e=>setDuracion(Number(e.target.value))} className="mt-1 block w-full rounded-xl border p-2.5 font-normal"/></label>
- <p className="text-slate-500">{scenario==='five'?`Fin del periodo: ${start?cincoDiasDespues(start):'—'}`:'La duración es una referencia de velocidad; el colapso no tiene fecha de fin predefinida.'}</p>
+ <p className="text-slate-500">{scenario==='five'?`Fin del periodo: ${start?cincoDiasDespues(start):'—'}`:'El tiempo real resulta del procesamiento; no se fija una duración objetivo.'}</p>
  <div className={`rounded-xl border p-3 leading-relaxed ${coverage?.faltantes.length?'border-amber-200 bg-amber-50 text-amber-900':'border-slate-200 bg-slate-50 text-slate-600'}`}><h4 className="font-bold">Cobertura de datos</h4>{!coverage?<p>Comprobando archivos del periodo…</p>:<><p>{coverage.archivos.join(' + ')||'Sin archivos de ventas'}</p><p>{coverage.pedidos.toLocaleString('es-PE')} pedidos en los primeros cinco días · {coverage.lineasInvalidas} líneas inválidas</p>{coverage.faltantes.length>0&&<p className="mt-1 font-semibold">Faltan: {coverage.faltantes.join(', ')}</p>}<p>Bloqueos planificados: {coverage.bloqueos??0}</p></>}<button className="mt-2 font-semibold text-blue-700 underline" onClick={()=>ctx.setPanelActivo('datos')}>Gestionar datos de entrada</button><p className="mt-1 text-[11px]">La carga se realiza en su propio panel, antes de iniciar. Puedes seleccionar varios archivos mensuales o un ZIP.</p></div>
  <button onClick={()=>void iniciar()} disabled={bloqueado} className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-3 font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300"><Play className="size-4"/>{starting?'Iniciando…':scenario==='five'?'Iniciar simulación de cinco días':'Iniciar simulación hasta el colapso'}</button><p role="alert" className="text-red-700">{error}</p></section>
 }
@@ -373,9 +372,9 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
     ocupado: ocupado => { setSimBusy(ocupado); if (ocupado) setSimMsg('') },
   })
   const cambiarEscenario = (s: Scenario) => { invalidarSim(); setReplanned(false); setHighlightOrderId(null); setScenario(s); setState(s === 'day' ? 'running' : 'idle') }
-  const startSim = async (tipo: SimType, start: string, duracion = 45) => {
+  const startSim = async (tipo: SimType, start: string) => {
     invalidarSim(); const version = generaciones.actual()
-    await respuestaVigente(tipo === 'five' ? iniciarCincoDias(start, duracion) : iniciarColapso(start, duracion), generaciones, version, v => { setSim(v); setReplanned(false); setState('running');setPanel(false) })
+    await respuestaVigente(tipo === 'five' ? iniciarCincoDias(start) : iniciarColapso(start), generaciones, version, v => { setSim(v); setReplanned(false); setState('running');setPanel(false) })
   }
   // Al colapsar se resalta el pedido causante en el mapa
   const causante = sim?.colapso?.pedido?.codigo
@@ -393,7 +392,7 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
     const nums = [orderLight.verde, orderLight.rojo, stockLight.verde, stockLight.rojo].map(Number)
     if (nums.some(n => !Number.isFinite(n) || n < 0)) return setParamsMsg('Revisa los valores: deben ser números positivos.')
     if (Number(orderLight.verde) <= Number(orderLight.rojo)) return setParamsMsg('En pedidos, el límite de verde debe ser mayor que el de rojo.')
-    if (Number(stockLight.verde) <= Number(stockLight.rojo) || Number(stockLight.verde) > 100) return setParamsMsg('En stock, verde debe ser mayor que rojo y como máximo 100 %.')
+    if (Number(stockLight.verde) <= Number(stockLight.rojo) || Number(stockLight.verde) > 100) return setParamsMsg('En existencias, verde debe ser mayor que rojo y como máximo 100 %.')
     onUmbrales({ pedido: { verde: Number(orderLight.verde), rojo: Number(orderLight.rojo) }, stock: { verde: Number(stockLight.verde), rojo: Number(stockLight.rojo) } })
     setParamsMsg('Cambios aplicados: el mapa ya usa los nuevos semáforos. No alteran el reloj de la ejecución.')
   }
@@ -433,7 +432,7 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
           <div className="mt-1 grid grid-cols-2 gap-2"><label className="font-semibold text-emerald-700">Verde si margen ≥<input type="number" value={orderLight.verde} onChange={e => setOrderLight({ ...orderLight, verde: e.target.value })} className={field} /></label><label className="font-semibold text-red-700">Rojo si margen &lt;<input type="number" value={orderLight.rojo} onChange={e => setOrderLight({ ...orderLight, rojo: e.target.value })} className={field} /></label></div>
           <p className="mt-1 text-slate-500"><b className="text-amber-700">Ámbar</b> entre {orderLight.rojo || '?'} h y {orderLight.verde || '?'} h. Más margen es más seguro.</p>
           <p className="mt-4 font-bold text-slate-700">Semáforo de existencias · almacenes intermedios (% disponible)</p>
-          <div className="mt-1 grid grid-cols-2 gap-2"><label className="font-semibold text-emerald-700">Verde si stock ≥<input type="number" value={stockLight.verde} onChange={e => setStockLight({ ...stockLight, verde: e.target.value })} className={field} /></label><label className="font-semibold text-red-700">Rojo si stock &lt;<input type="number" value={stockLight.rojo} onChange={e => setStockLight({ ...stockLight, rojo: e.target.value })} className={field} /></label></div>
+          <div className="mt-1 grid grid-cols-2 gap-2"><label className="font-semibold text-emerald-700">Verde si existencias ≥<input type="number" value={stockLight.verde} onChange={e => setStockLight({ ...stockLight, verde: e.target.value })} className={field} /></label><label className="font-semibold text-red-700">Rojo si existencias &lt;<input type="number" value={stockLight.rojo} onChange={e => setStockLight({ ...stockLight, rojo: e.target.value })} className={field} /></label></div>
           <p className="mt-1 text-slate-500"><b className="text-amber-700">Ámbar</b> entre {stockLight.rojo || '?'} % y {stockLight.verde || '?'} %. El almacén central es ilimitado y no usa semáforo.</p>
           <div className="mt-4 flex flex-wrap items-center gap-3"><button onClick={applyParams} className="bg-blue-700 px-4 py-2 font-bold text-white">Aplicar cambios</button>{paramsMsg && <span className={paramsMsg.startsWith('Cambios') ? 'text-emerald-700' : 'font-semibold text-red-700'}>{paramsMsg}</span>}</div>
         </div>}
@@ -485,7 +484,7 @@ function Operator({ scenario, setScenario, state, setState, replanned, setReplan
             const a = mapa?.almacenes.find(x => (NOMBRE_ALMACEN[x.codigo] ?? x.codigo) === warehouse)
             const stock = (pct: number, texto: string) => <>{texto} · <span className={`font-bold ${TEXTO_SEMAFORO[tonoStock(pct, u.stock)]}`}>● {{ 'vacío': 'vacío', verde: 'verde', ambar: 'ámbar', rojo: 'rojo' }[tonoStock(pct, u.stock)]}</span></>
             const filas: [string, ReactNode][] = a
-              ? [['Stock', a.central ? 'Ilimitado (no usa semáforo)' : a.pct == null ? 'No disponible' : stock(a.pct, `${a.stock?.toLocaleString('es-PE')} de ${a.capacidad?.toLocaleString('es-PE')} u · ${a.pct} %`)],
+              ? [['Existencias', a.central ? 'Ilimitado (no usa semáforo)' : a.pct == null ? 'No disponible' : stock(a.pct, `${a.stock?.toLocaleString('es-PE')} de ${a.capacidad?.toLocaleString('es-PE')} u · ${a.pct} %`)],
                  ['Unidades en base', String(a.vehiculosEnBase)], ['Unidades en ruta', String(a.unidadesFuera)], ['Pedidos por entregar', String(a.pedidosPorEntregar)], ['Ubicación', `(${a.x}, ${a.y})`]]
               : [['Datos', 'No disponibles']]
             return <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">{filas.map(([k, v]) => <Fragment key={k}><dt className="text-slate-500">{k}</dt><dd className="font-semibold">{v}</dd></Fragment>)}</dl>

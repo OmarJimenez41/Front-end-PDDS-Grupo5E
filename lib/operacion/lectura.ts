@@ -25,7 +25,7 @@ export async function leerOperacion(
 ): Promise<LecturaOperacion> {
   if(api.vista){
     const {mapa,unidades}=await api.vista(id,signal)
-    if(mapa.escenarioId!==unidades.escenarioId||mapa.relojH!==unidades.relojH||!publicarMapa(mapa))throw new Error('Corte operativo incoherente o anterior')
+    if(mapa.escenarioId!==id||mapa.escenarioId!==unidades.escenarioId||mapa.relojH!==unidades.relojH||!publicarMapa(mapa))throw new Error('Corte operativo incoherente o anterior')
     return {mapa,unidades,estadoDetalle:'actual'}
   }
   let a = await api.mapa(id, signal)

@@ -17,7 +17,7 @@ export function iniciarControlador(
   const publicar = (mapa: InstantaneaOperacion) => {
     if (!activo || abort.signal.aborted || mapa.escenarioId !== escenarioId ||
         (ultimoMapa && (mapa.versionEstado < ultimoMapa.versionEstado ||
-          (mapa.versionEstado === ultimoMapa.versionEstado && mapa.relojH < ultimoMapa.relojH)))) return false
+          mapa.relojH < ultimoMapa.relojH))) return false
     ultimoMapa = mapa
     eventos.mapa(mapa)
     return true

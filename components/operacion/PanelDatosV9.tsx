@@ -4,6 +4,7 @@ import {Upload,CheckCircle2,AlertCircle,FileText} from 'lucide-react'
 import {pedir,subirDatos,mensajeError,type ArchivoDatos} from '../../lib/api/simulacion'
 import {useV9} from './ContextoV9'
 import {PanelTrabajoV9} from './PanelTrabajoV9'
+import {VerificarOriginales} from './VerificarOriginales'
 type Carga={nombre:string;estado:'pendiente'|'subiendo'|'correcto'|'error';detalle:string}
 export function PanelDatosV9(){
  const ctx=useV9(),[archivos,setArchivos]=useState<ArchivoDatos[]>([]),[elegidos,setElegidos]=useState<File[]>([]),[cargas,setCargas]=useState<Carga[]>([]),[ocupado,setOcupado]=useState(false),[error,setError]=useState('')
@@ -30,5 +31,6 @@ export function PanelDatosV9(){
  <p role="status" className="mt-2 text-red-700">{error}</p>
  <h3 className="mt-5 font-bold">Disponibles en el servidor ({archivos.length})</h3><p className="mt-1 text-slate-500">Los datos no se pueden cambiar durante una simulación en ejecución o en pausa.</p>
  <ul className="mt-2 divide-y divide-slate-100">{archivos.map(a=><li key={a.nombre} className="py-3"><div className="flex justify-between gap-2"><b className="break-all">{a.nombre}</b><span className="shrink-0 rounded bg-slate-100 px-2 py-1 text-[10px]">{a.tipo}</span></div><p className="mt-1 text-slate-500">Periodo {a.periodo} · {a.leidos.toLocaleString('es-PE')} registros · {a.invalidos} inválidos</p></li>)}</ul>
+ <VerificarOriginales/>
  </PanelTrabajoV9>
 }

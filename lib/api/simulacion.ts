@@ -180,26 +180,23 @@ export function validarCobertura(fechaHoraInicio: string) {
   return pedir<Cobertura>(`/api/simulaciones/cobertura?inicio=${encodeURIComponent(sinZona(fechaHoraInicio))}`)
 }
 
-/** Minutos reales que toman los cinco días simulados; sin este valor el back-end usa su ritmo por defecto (45 min). */
-export const DURACION_REAL_MIN = 45
-
 /** Inicia los cinco días; responde 409 con la causa si faltan archivos de ventas. */
-export function iniciarCincoDias(fechaHoraInicio: string, duracionRealMin = DURACION_REAL_MIN) {
+export function iniciarCincoDias(fechaHoraInicio: string) {
   const comienzo=performance.now()
   return pedir<VistaSimulacion>('/api/simulaciones/cinco-dias', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fechaHoraInicio: sinZona(fechaHoraInicio), duracionRealMin }),
+    body: JSON.stringify({ fechaHoraInicio: sinZona(fechaHoraInicio) }),
   }).then(async v=>{const {inicioMedido}=await import('../operacion/latencia');inicioMedido(v.simulacion.escenarioId,comienzo);return v})
 }
 
-/** Inicia la simulación hasta el colapso; `duracionRealMin` fija el ritmo (lo que tardarían cinco días simulados). */
-export function iniciarColapso(fechaHoraInicio: string, duracionRealMin = DURACION_REAL_MIN) {
+/** Inicia hasta el colapso, sin una duración real objetivo. */
+export function iniciarColapso(fechaHoraInicio: string) {
   const comienzo=performance.now()
   return pedir<VistaSimulacion>('/api/simulaciones/colapso', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fechaHoraInicio: sinZona(fechaHoraInicio), duracionRealMin }),
+    body: JSON.stringify({ fechaHoraInicio: sinZona(fechaHoraInicio) }),
   }).then(async v=>{const {inicioMedido}=await import('../operacion/latencia');inicioMedido(v.simulacion.escenarioId,comienzo);return v})
 }
 

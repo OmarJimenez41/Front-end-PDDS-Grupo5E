@@ -72,8 +72,8 @@ export function MapaOperativo({ state, highlightOrderId, full = false, replanned
   const objetivo = buscado ? datos.rastreo.find(q => q.codigo === buscado) ?? null : null
   const averiadas = new Set(datos?.flota.filter(v => v.averiada).map(v => v.id))
   const flotaPorId = new globalThis.Map(datos.flota.map(f => [f.id, f]))
-  // Unidad libre, sin ruta ni servicio: no se dibuja. Si está en un almacén se cuenta en su etiqueta;
-  // si quedó fuera de uno, se consulta en el panel de flota. Sin estado del servidor se deduce de la flota.
+  // Las unidades libres se dibujan y se agrupan cuando comparten coordenadas.
+  // La etiqueta del almacén también informa cuántas unidades permanecen en su base.
   const libre = (v: MapaDatos['vehiculos'][number]) => {
     if (v.estado) return v.estado === 'EN_BASE'
     const f = flotaPorId.get(v.id)
@@ -84,7 +84,6 @@ export function MapaOperativo({ state, highlightOrderId, full = false, replanned
     enBase:datos.vehiculos.filter(v=>libre(v)&&Math.round(v.x)===a.x&&Math.round(v.y)===a.y).length}))
   const hayBloqueo = !!datos?.incidencias.some(i => i.tipo === 'BLOQUEO')
   const filtradas = datos.vehiculos.filter(v => {
-    if(libre(v)&&v.id!==unidadSeleccionada)return false
     const unidad=ctx.unidades?.unidades.find(u=>u.id===v.id)
     if(unidad)return unidadCumple(unidad,ctx.filtros,ctx.mapa,ctx.limites)
     const ruta=ctx.mapa?.plan?.rutas.find(r=>r.vehiculoId===v.id&&r.horaFinH>datos.relojH)
@@ -133,7 +132,7 @@ export function MapaOperativo({ state, highlightOrderId, full = false, replanned
     {almacenes.filter(a => ctx.filtros.luzAlmacen==='todos' || (a.central?'no disponible':a.pct==null?'no disponible':tonoStock(a.pct,u.stock).replace('ambar','ámbar'))===ctx.filtros.luzAlmacen).map(a => <button type="button" data-map-marker key={a.nombre} title={`${a.nombre} (${a.x},${a.y}) · ${a.central ? 'existencias ilimitadas' : a.pct == null ? 'existencias no disponibles' : `existencias ${a.pct}%`}${onWarehouse ? ' · clic para ver detalle' : ''}`} onClick={() => {ctx.setEnfoque({x:a.x,y:a.y,clave:Date.now()});ctx.setPanelActivo('almacenes');onWarehouse?.(a.nombre)}} className={`absolute z-[3] flex flex-col items-center ${onWarehouse ? 'cursor-pointer' : ''}`} style={pos(a.x, a.y)}>
       <div className={`flex size-8 items-center justify-center border-2 border-white shadow-md ${a.nombre === almacenMarcado ? 'animate-pulse ring-4 ring-blue-500' : 'ring-1 ring-slate-300'} ${a.central ? 'bg-blue-700' : a.pct == null ? 'bg-slate-400' : CLASE_SEMAFORO[tonoStock(a.pct,u.stock)]} text-white`}><Warehouse className="size-4" /></div>
       {a.pct != null && <div className="mt-1 h-1.5 w-12 bg-white ring-1 ring-slate-300"><div className={`h-full ${CLASE_SEMAFORO[tonoStock(a.pct, u.stock)]}`} style={{ width: `${a.pct}%` }} /></div>}
-      <span className="mt-1 block whitespace-nowrap bg-white/90 px-1.5 py-0.5 text-[10px] font-bold text-slate-700 shadow-sm">{a.nombre} · {a.central ? <span className="text-blue-700">∞</span> : a.pct == null ? 'existencias no disponibles' : <span className={TEXTO_SEMAFORO[tonoStock(a.pct, u.stock)]}>stock {a.pct}%</span>}</span>
+      <span className="mt-1 block whitespace-nowrap bg-white/90 px-1.5 py-0.5 text-[10px] font-bold text-slate-700 shadow-sm">{a.nombre} · {a.central ? <span className="text-blue-700">∞</span> : a.pct == null ? 'existencias no disponibles' : <span className={TEXTO_SEMAFORO[tonoStock(a.pct, u.stock)]}>existencias {a.pct}%</span>}</span>
       {a.enBase > 0 && <span className="block whitespace-nowrap bg-white/90 px-1.5 text-[10px] font-semibold text-slate-500 shadow-sm">{a.enBase} UT en base</span>}
     </button>)}
 
@@ -196,8 +195,8 @@ function Leyenda({ full, real, incident, averia = false, collapse, buscado }: { 
         <span className={titulo}>Almacenes</span>
         <span className={item}><span className="inline-block size-3 border-2 border-white bg-blue-700 shadow" />Central · existencias ilimitadas</span>
         <span className={item}><span className="inline-block size-3 border-2 border-white bg-slate-700 shadow" />Intermedio</span>
-        <span className={item}><span className="flex h-1.5 w-8 bg-white ring-1 ring-slate-300"><span className="h-full w-1/3 bg-emerald-600" /><span className="h-full w-1/3 bg-amber-500" /><span className="h-full w-1/3 bg-red-600" /></span>Vacío = 0 %. Stock disponible: verde ≥ {u.stock.verde} % · ámbar · rojo &lt; {u.stock.rojo} %</span>
-        {real && <span className={item}><b>N UT en base</b> = unidades libres en ese almacén. Las unidades sin ruta no se dibujan; se consultan en Flota</span>}
+        <span className={item}><span className="flex h-1.5 w-8 bg-white ring-1 ring-slate-300"><span className="h-full w-1/3 bg-emerald-600" /><span className="h-full w-1/3 bg-amber-500" /><span className="h-full w-1/3 bg-red-600" /></span>Vacío = 0 %. Existencias disponibles: verde ≥ {u.stock.verde} % · ámbar · rojo &lt; {u.stock.rojo} %</span>
+        {real && <span className={item}><b>N UT en base</b> = unidades libres en ese almacén. Las unidades coincidentes se agrupan; pulsa el grupo para localizar cada una.</span>}
       </div>
       <div className="flex flex-wrap gap-x-3 gap-y-1">
         <span className={titulo}>Rutas por tipo de vehículo</span>
