@@ -209,3 +209,430 @@
     @apply bg-background text-foreground;
   }
 }
+
+
+/* PaqRap · Centro de control. Mapa, navegación y consultas comparten una jerarquía. */
+.paqrap-app{--tinta:#142c3a;--acento:#155e75;--borde:#dce5e7;color:var(--tinta);background:#f6f8f8}
+.paqrap-app button,.paqrap-app a,.paqrap-app summary{-webkit-tap-highlight-color:transparent}
+.paqrap-app button:focus-visible,.paqrap-app a:focus-visible,.paqrap-app summary:focus-visible{outline:3px solid #0891b2;outline-offset:3px}
+.paqrap-app button:disabled{cursor:not-allowed;opacity:.55}
+.superficie-operacion{--ancho-panel:440px;background:#eef2f1}
+.superficie-operacion[data-panel=envios],.superficie-operacion[data-panel=datos],.superficie-operacion[data-panel=reportes]{--ancho-panel:560px}
+.mapa-operativo{touch-action:none}
+.superficie-operacion[data-panel]:not([data-panel=ninguno]) .mapa-operativo{right:calc(var(--ancho-panel) + 12px)}
+.superficie-operacion .panel-trabajo-v9{top:12px!important;right:12px!important;bottom:12px!important;width:var(--ancho-panel)!important;max-width:calc(100% - 24px)!important;animation:entrada-panel 160ms ease-out;border-color:#dbe5e7;box-shadow:0 8px 30px #142c3a12}
+.superficie-operacion .panel-trabajo-v9>section{width:100%!important;max-width:100%!important}
+.panel-trabajo-v9{font-size:13px!important;line-height:1.5}
+.panel-trabajo-v9 label{font-size:12px!important;color:#415d6a}
+.panel-trabajo-v9 input:not([type=file]),.panel-trabajo-v9 select{min-height:40px;font-size:13px!important;background:#f7fafb;border-color:#d7e2e6}
+.panel-trabajo-v9 h2{font-size:18px;letter-spacing:-.025em}
+.panel-trabajo-v9 h3{font-size:14px}
+.panel-trabajo-v9 .text-\[10px\],.panel-trabajo-v9 .text-\[11px\]{font-size:12px!important}
+.panel-trabajo-v9 [aria-label^=Cerrar]{min-width:36px;min-height:36px}
+.marcador-unidad{width:36px;height:36px;overflow:visible}
+.marcador-unidad>div:first-child{width:36px}
+.marcador-unidad button{box-shadow:0 2px 5px #142c3a35}
+.marcador-almacen{z-index:2}
+.marcador-almacen>div:first-child{border-radius:9px;width:36px;height:36px}
+.marcador-almacen>span{border-radius:5px;font-size:11px!important;box-shadow:0 2px 8px #18323d10}
+.etiqueta-unidad{position:absolute;top:38px;left:50%;transform:translateX(-50%);border:1px solid #e0e8e9;border-radius:6px;line-height:1.3;pointer-events:none}
+.detalle-unidad{display:none;position:absolute;top:66px;left:50%;transform:translateX(-50%);white-space:nowrap;background:#163749;color:white;border-radius:6px;padding:5px 8px;font-size:11px;box-shadow:0 4px 12px #102b3d26}
+.marcador-unidad:hover,.marcador-unidad:focus-within{z-index:15!important}
+.marcador-unidad:hover .detalle-unidad,.marcador-unidad:focus-within .detalle-unidad,.detalle-unidad.seleccionada{display:block}
+.marcador-unidad [aria-label='Averías visibles']{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:4px;white-space:nowrap}
+.marcador-pedido{min-width:20px;min-height:20px}
+.controles-mapa{padding:4px;background:#fffffff2;border:1px solid #d5e0e2;border-radius:12px;box-shadow:0 4px 16px #18323d12}
+.controles-mapa button{min-width:36px;min-height:36px;border:0;border-radius:8px;box-shadow:none;background:transparent}
+.controles-mapa button:hover{background:#eaf3f3;color:#155e75}
+.leyenda-mapa{border-radius:10px!important;font-size:12px!important;box-shadow:0 4px 16px #18323d12!important}
+.estado-mapa{position:absolute;left:20px;top:16px;display:flex;align-items:center;gap:7px;z-index:5;pointer-events:none;padding:7px 10px;background:#ffffffed;border:1px solid #dce5e7;border-radius:8px;font-size:11px;color:#526c77;box-shadow:0 2px 8px #18323d06}
+.indicador-conexion{height:6px;width:6px;border-radius:50%;background:#0d9488}
+.indicador-conexion.desconectado{background:#d97706}
+.escala-mapa{border-left:1px solid #dce5e7;padding-left:8px;font-variant-numeric:tabular-nums}
+@keyframes entrada-panel{from{opacity:0;transform:translateX(8px)}to{opacity:1;transform:translateX(0)}}
+@media(max-width:1100px){.superficie-operacion{--ancho-panel:380px}.superficie-operacion[data-panel=envios],.superficie-operacion[data-panel=datos],.superficie-operacion[data-panel=reportes]{--ancho-panel:460px}}
+@media(max-width:760px){.superficie-operacion[data-panel]:not([data-panel=ninguno]) .mapa-operativo{right:0;bottom:48%}.superficie-operacion .panel-trabajo-v9{position:absolute!important;top:53%!important;left:8px!important;right:8px!important;bottom:8px!important;width:calc(100% - 16px)!important;max-width:none!important;border-radius:16px!important}.estado-mapa{left:12px;top:12px}.controles-mapa{left:12px;bottom:12px}.leyenda-mapa{right:12px!important;bottom:12px!important}.marcador-unidad .etiqueta-unidad{font-size:10px!important}}
+@media(prefers-reduced-motion:reduce){.paqrap-app *, .paqrap-app *:before,.paqrap-app *:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+.grupo-en-base>div:first-child>button{position:absolute;left:22px;top:-14px;min-width:25px;min-height:25px;height:25px;border-radius:8px;font-size:11px;background:#163749}
+.grupo-en-base .etiqueta-unidad{top:-43px;left:38px}
+.tarjeta-metrica{display:flex;gap:12px;padding:14px;background:#f5f9fa;border:1px solid #dce7e9;border-radius:12px}
+.tarjeta-metrica h4{font-size:12px;font-weight:650;color:#4c6874}
+.tarjeta-metrica strong{display:block;font-size:22px;line-height:1.4;letter-spacing:-.04em;font-variant-numeric:tabular-nums;color:#173848}
+.tarjeta-metrica p,.tarjeta-metrica small{display:block;font-size:11px;line-height:1.6;color:#607985}
+.tarjeta-metrica small{margin-top:5px;color:#3e626e}
+.sigla-metrica{display:flex;align-items:center;justify-content:center;width:36px;height:36px;flex-shrink:0;border-radius:10px;background:#dfeff0;color:#155e75;font-size:15px;font-weight:750}
+.tiempos-planificador{margin-top:20px;padding-top:18px;border-top:1px solid #e0e8e9}
+
+.estado-inicial-mapa{display:flex;flex-direction:column;align-items:center;gap:12px;max-width:320px;text-align:center;padding:24px}
+.estado-inicial-mapa strong{font-size:18px;color:#173848}
+.estado-inicial-mapa span{font-size:13px;line-height:1.7;color:#607783}
+.estado-mapa{top:auto;bottom:76px;left:20px}
+.aviso-plan{top:60px!important;max-width:min(70%,540px)!important;font-size:11px!important;border-radius:8px!important}
+.alerta-mapa{top:108px!important;max-width:calc(100% - 36px);width:max-content;border-radius:10px;box-shadow:0 4px 16px #18323d10}
+.acciones-mapa>button{min-height:36px;border-radius:9px;font-size:11px;box-shadow:0 2px 8px #18323d0a}
+.superficie-operacion[data-panel]:not([data-panel=ninguno]) .acciones-mapa{right:calc(var(--ancho-panel) + 24px);max-width:calc(100% - var(--ancho-panel) - 36px)}
+.superficie-operacion[data-panel]:not([data-panel=ninguno]) .alerta-mapa{left:18px;transform:none;max-width:calc(100% - var(--ancho-panel) - 36px)}
+@media(max-width:760px){.acciones-mapa{max-width:calc(100% - 24px)!important;right:12px!important}.acciones-mapa>button{font-size:10px}.superficie-operacion[data-panel]:not([data-panel=ninguno]) .alerta-mapa{max-width:calc(100% - 36px)}.aviso-plan{max-width:calc(100% - 24px)!important;top:100px!important}.alerta-mapa{top:150px!important;font-size:11px}.estado-mapa{left:12px;bottom:64px}}
+
+/* Las etiquetas de UT aparecen solo al consultar una unidad. */
+.marcador-unidad .etiqueta-unidad{visibility:hidden;opacity:0}
+.marcador-unidad:hover .etiqueta-unidad,.marcador-unidad:focus-within .etiqueta-unidad,.marcador-unidad[data-seleccionado=true] .etiqueta-unidad{visibility:visible;opacity:1}
+.marcador-unidad[data-seleccionado=true]{z-index:14!important}
+@media(hover:none){.marcador-unidad:not([data-seleccionado=true]):hover .etiqueta-unidad{visibility:hidden;opacity:0}}
+
+/* Distribución: acciones fuera del lienzo, información bajo demanda. */
+.superficie-operacion{--alto-acciones:60px}
+.superficie-operacion[data-panel]:not([data-panel=ninguno]){--alto-acciones:104px}
+.lienzo-operacion{top:var(--alto-acciones)}
+.franja-acciones{position:absolute;inset:0 0 auto;height:var(--alto-acciones);background:#ffffff;border-bottom:1px solid #e2e8f0;pointer-events:none}
+.acciones-mapa{top:12px!important;max-width:calc(100% - 190px)!important;align-items:center!important}
+.acciones-mapa>div{width:280px;max-width:100%}
+.acciones-mapa input{border-radius:9px;border-color:#d8e2e7;min-height:36px;background:#f8fafc}
+.aviso-conexion{display:flex;flex-shrink:0;align-items:center;gap:9px;padding:8px 20px;background:#fff8e8;border-block:1px solid #f1d89a;color:#865b13;font-size:12px}
+.aviso-conexion>span:not(.sr-only){flex:1}
+.aviso-conexion button{border:1px solid #dbbb77;border-radius:7px;background:white;padding:5px 10px;font-weight:650}
+.aviso-plan{position:absolute!important;top:auto!important;bottom:76px;left:auto!important;right:20px;transform:none!important;max-width:45%!important;padding:6px 9px;border:1px solid #e5cf9c;border-radius:8px;background:#fff9ebed;font-size:11px!important;color:#8a6118;box-shadow:0 2px 8px #142c3a08}
+.marcador-pedido{width:20px;height:20px;overflow:visible;z-index:1}
+.marcador-pedido .etiqueta-pedido{position:absolute;top:22px;left:50%;transform:translateX(-50%);border:1px solid #dce5e7;border-radius:6px;visibility:hidden;opacity:0;pointer-events:none}
+.marcador-pedido:hover,.marcador-pedido:focus-within,.marcador-pedido[data-seleccionado=true]{z-index:16!important}
+.marcador-pedido:hover .etiqueta-pedido,.marcador-pedido:focus-within .etiqueta-pedido,.marcador-pedido[data-seleccionado=true] .etiqueta-pedido,.marcador-pedido.detalle-zoom .etiqueta-pedido{visibility:visible;opacity:1}
+.barra-paneles{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+.barra-paneles>button{margin-top:0!important;white-space:nowrap}
+@media(min-width:900px){.rejilla-tiempos{grid-template-columns:repeat(4,minmax(0,1fr))}.rejilla-tiempos.tiempos-dia{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(min-width:761px) and (max-width:1100px){.superficie-operacion[data-panel]:not([data-panel=ninguno]) .acciones-mapa{max-width:calc(100% - var(--ancho-panel) - 180px)!important}.superficie-operacion[data-panel]:not([data-panel=ninguno]) .acciones-mapa>div{width:100%}.acciones-mapa>button{font-size:10px!important;padding:6px 8px!important}}
+@media(max-width:760px){.superficie-operacion,.superficie-operacion[data-panel]:not([data-panel=ninguno]){--alto-acciones:112px}.acciones-mapa{top:12px!important;right:12px!important;max-width:calc(100% - 24px)!important}.acciones-mapa>div{width:calc(100% - 170px);min-width:160px}.aviso-plan{bottom:64px;right:12px;max-width:45%!important;font-size:10px!important}.aviso-conexion{padding:7px 12px;font-size:11px}.barra-paneles{align-items:flex-start}.rejilla-tiempos>div{padding:8px!important}}
+
+/* El control de una barra recogida conserva su propia fila, sin invadir Incidencias. */
+.herramientas-v9:has(#contenido-barra-v9[hidden]){height:44px!important;min-height:44px;padding:0!important;border-bottom:1px solid #e2e8f0;background:#fff}
+.herramientas-v9:has(#contenido-barra-v9[hidden])>button[aria-controls=contenido-barra-v9]{top:5px;right:12px;width:auto;height:34px;display:flex;align-items:center;gap:8px;padding:0 10px;border-radius:8px;box-shadow:none}
+.texto-barra-recogida{font-size:11px;font-weight:600;color:#526977;white-space:nowrap}
+.acciones-mapa>button{height:36px;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}
+.acciones-mapa>button svg{width:16px;height:16px;flex-shrink:0;margin:0}
+.acciones-mapa input{height:36px;box-sizing:border-box}
+
+@media(max-width:760px){
+ .acciones-mapa{display:flex!important;flex-wrap:wrap!important;justify-content:flex-end!important;width:calc(100% - 24px)!important;max-width:calc(100% - 24px)!important}
+ .acciones-mapa>div{width:calc(100% - 170px)!important;min-width:0!important;flex:0 0 calc(100% - 170px);margin-left:170px}
+}
+
+/* Agrupaciones de símbolos: un contador consultable, no una nueva posición de vehículo. */
+.grupo-cercano>div:first-child>button{position:absolute;left:20px;top:-12px;min-width:28px;min-height:28px;height:28px;border-radius:9px;background:#173b50;font-size:12px;box-shadow:0 3px 8px #173b5033}
+.grupo-cercano:before{content:"";position:absolute;left:15px;top:15px;width:6px;height:6px;border-radius:50%;background:#173b50;box-shadow:0 0 0 2px white}
+.grupo-cercano .etiqueta-unidad{left:35px;top:-39px}
+.detalle-grupo{z-index:40!important;min-width:260px}
+.detalle-grupo>button:not(:last-child){border-color:#e8eef1}
+.detalle-grupo>button:hover{background:#eff6fa}
+.detalle-grupo>button{min-height:36px;line-height:1.6}
+.panel-trabajo-v9>div:first-child{background:#f8fafc;border-bottom:1px solid #e2e8f0;padding:18px 20px}
+.panel-trabajo-v9>div:last-child{padding:18px 20px;scrollbar-width:thin;scrollbar-color:#cbd5e1 transparent}
+.panel-trabajo-v9>div:first-child h2{font-size:17px;line-height:1.35;letter-spacing:-.025em}
+.panel-trabajo-v9>div:first-child p{font-size:12px;line-height:1.6;color:#64748b}
+.panel-trabajo-v9 label{line-height:1.5}
+.panel-trabajo-v9 input,.panel-trabajo-v9 select{margin-top:5px}
+.panel-trabajo-v9 details{border-radius:10px}
+.panel-trabajo-v9 details>summary{font-size:12px;line-height:1.5}
+.panel-trabajo-v9 button.border{border-color:#d8e2e8;border-radius:8px;padding:6px 10px;font-size:12px;min-height:34px}
+.panel-trabajo-v9 article{border-color:#e0e8ee}
+
+.grupo-cercano[data-borde=derecha]>div:first-child>button{left:-12px}
+.grupo-cercano[data-borde-superior=true]>div:first-child>button{top:12px}
+.selector-grupo{position:absolute;z-index:40;top:16px;left:50%;transform:translateX(-50%);width:340px;max-width:calc(100% - 32px);max-height:calc(100% - 32px);display:flex;flex-direction:column;overflow:hidden;border:1px solid #d8e3ea;border-radius:15px;background:white;box-shadow:0 12px 40px #173b5026}
+.cabecera-selector{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:16px;border-bottom:1px solid #e7edf2;background:#f8fafc}
+.cabecera-selector h3{font-size:14px;font-weight:700;color:#173b50}
+.cabecera-selector h3 span{margin-left:6px;border-radius:5px;background:#e4edf4;padding:2px 5px;font-size:11px}
+.cabecera-selector p{margin-top:4px;font-size:11px;line-height:1.5;color:#64748b}
+.cabecera-selector>button{padding:6px;border-radius:7px;color:#64748b}
+.lista-selector{overflow-y:auto;min-height:0}
+.lista-selector>button{display:flex;width:100%;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid #eef2f6;text-align:left}
+.lista-selector>button:hover,.lista-selector>button:focus-visible{background:#edf5fc}
+.lista-selector b{display:block;font-size:12px;color:#234457}
+.lista-selector small{display:block;margin-top:3px;font-size:10px;line-height:1.5;color:#64748b}
+.dato-selector{text-align:right;font-variant-numeric:tabular-nums}
+.pie-selector{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 16px;border-top:1px solid #e7edf2}
+.pie-selector button{border-radius:8px;padding:8px 10px;background:#1d4ed8;font-size:11px;font-weight:650;color:white}
+.pie-selector>span{max-width:115px;font-size:10px;line-height:1.5;color:#64748b}
+
+/* Barra única: los controles se agrupan en vez de ocupar dos franjas separadas. */
+.herramientas-v9:has(#contenido-barra-v9[hidden]){height:0!important;min-height:0!important;border:0!important;padding:0!important}
+.acciones-mapa{left:170px!important;right:12px!important;width:auto!important;max-width:calc(100% - 182px)!important;display:flex!important;justify-content:flex-start!important;align-items:center!important;gap:8px!important}
+.acciones-mapa>div{width:250px;flex:0 1 250px;min-width:140px}
+.acciones-mapa .boton-herramientas-mapa{border:1px solid #dce5eb;background:#f8fafc;color:#526977;padding:0 10px;border-radius:8px;font-size:11px;height:36px;gap:8px}
+.escena-operacion[data-modo=consulta] .acciones-mapa{left:110px!important;max-width:calc(100% - 122px)!important}
+.superficie-operacion[data-panel]:not([data-panel=ninguno]) .acciones-mapa{right:calc(var(--ancho-panel) + 24px)!important;max-width:calc(100% - var(--ancho-panel) - 194px)!important}
+.superficie-operacion[data-panel]:not([data-panel=ninguno]) .boton-herramientas-mapa span{display:none}
+@media(max-width:1100px) and (min-width:761px){.escena-operacion[data-modo=operador]{--alto-acciones:104px}.acciones-mapa .boton-herramientas-mapa span{display:none}.superficie-operacion[data-panel]:not([data-panel=ninguno]) .acciones-mapa>div{flex-basis:100%;width:100%}}
+@media(max-width:760px){.escena-operacion[data-modo=operador]{--alto-acciones:104px}.escena-operacion[data-modo=consulta]{--alto-acciones:60px}.acciones-mapa{left:12px!important;right:12px!important;width:calc(100% - 24px)!important;max-width:calc(100% - 24px)!important;justify-content:flex-end!important}.acciones-mapa>div{order:0;margin-left:170px;flex:0 0 calc(100% - 218px);width:calc(100% - 218px)!important;min-width:0!important}.acciones-mapa>.boton-herramientas-mapa{order:1;width:36px;padding:0;justify-content:center}.acciones-mapa>button:not(.boton-herramientas-mapa){order:2}.boton-herramientas-mapa span{display:none}.escena-operacion[data-modo=consulta] .acciones-mapa{left:110px!important;width:calc(100% - 122px)!important;max-width:calc(100% - 122px)!important}.escena-operacion[data-modo=consulta] .acciones-mapa>div{margin-left:0;flex:1 1 120px;width:auto!important}.superficie-operacion[data-panel]:not([data-panel=ninguno]) .acciones-mapa{right:12px!important;max-width:calc(100% - 24px)!important}}
+
+.escena-operacion[data-modo=consulta]{--alto-acciones:60px}
+
+/* Barra de consulta: una acción de estado, búsqueda principal y herramientas secundarias. */
+.escena-operacion[data-modo=consulta] .franja-acciones{background:#fff;box-shadow:0 2px 5px #18323d03}
+.boton-estado{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:40px;padding:0 12px;border:1px solid #cbdcf0;border-radius:10px;background:#edf4ff;color:#224f91;font-size:12px;font-weight:650;box-shadow:none}
+.boton-estado:hover{background:#e2edff;border-color:#a4c0e7}
+.escena-operacion[data-modo=consulta] .acciones-mapa{left:164px!important;max-width:calc(100% - 176px)!important;gap:10px!important}
+.acciones-mapa>.buscador-pedido{width:320px;flex:0 1 320px;min-width:160px}
+.buscador-pedido>form{display:flex;align-items:center;gap:9px;height:40px;padding:0 11px;border:1px solid #d4deea;border-radius:10px;background:white;box-shadow:0 1px 3px #173b5005;transition:border-color 120ms,box-shadow 120ms}
+.buscador-pedido>form:focus-within{border-color:#739ddd;box-shadow:0 0 0 3px #2563eb12}
+.buscador-pedido>form>svg{width:16px;height:16px;flex-shrink:0;color:#7489a3}
+.buscador-pedido>form>input{width:100%;min-width:0;height:38px!important;padding:0!important;margin:0!important;border:0!important;border-radius:0!important;outline:none!important;background:transparent!important;box-shadow:none!important;font-size:12px;color:#233e54}
+.buscador-pedido>form>input::placeholder{color:#8293a7}
+.buscador-pedido>form>button{display:flex;align-items:center;justify-content:center;flex-shrink:0;width:25px;height:25px;border-radius:6px;color:#64748b}
+.buscador-pedido>form>button:hover{background:#eef2f6}
+.buscador-pedido kbd{display:flex;align-items:center;justify-content:center;width:21px;height:22px;flex-shrink:0;border:1px solid #e2e8f0;border-radius:5px;background:#f8fafc;color:#94a3b8;font-family:inherit;font-size:12px}
+.acciones-mapa>.boton-herramientas-mapa{height:40px;padding:0 12px!important;border:1px solid #e0e6ed;background:#f8fafc;border-radius:10px;color:#526477;font-size:12px;font-weight:500;box-shadow:none}
+.acciones-mapa>.boton-herramientas-mapa:hover{background:#eef3f8;color:#294663;border-color:#cad7e4}
+.sugerencias-pedidos{position:absolute;top:calc(100% + 8px);left:0;z-index:45;width:max(100%,340px);max-width:calc(100vw - 32px);overflow:hidden;border:1px solid #dce5ee;border-radius:12px;background:white;box-shadow:0 12px 32px #173b501c}
+.titulo-sugerencias{padding:11px 13px;background:#f8fafc;border-bottom:1px solid #e9eef3;font-size:11px;font-weight:650;color:#52687e}
+.titulo-sugerencias span{display:block;margin-top:3px;font-size:10px;font-weight:400;color:#8190a2}
+.sugerencias-pedidos ul{max-height:300px;overflow-y:auto}
+.sugerencias-pedidos li[role=option]{display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;padding:11px 13px;border-bottom:1px solid #f0f3f7;text-align:left}
+.sugerencias-pedidos li[role=option]:hover,.sugerencias-pedidos li[aria-selected=true]{background:#edf4ff}
+.sugerencias-pedidos b{font-size:12px;color:#244368}
+.sugerencias-pedidos small{display:block;margin-top:3px;font-size:10px;color:#7b8ca0}
+.estado-sugerencia{padding:4px 6px;border-radius:5px;background:#f1f5f9;font-size:10px;color:#64748b;white-space:nowrap}
+.sin-resultados{padding:15px 13px;font-size:12px;color:#64748b}
+@media(max-width:1100px) and (min-width:761px){.escena-operacion[data-modo=consulta] .boton-herramientas-mapa span{display:inline}.superficie-operacion[data-panel]:not([data-panel=ninguno]) .escena-operacion[data-modo=consulta] .boton-herramientas-mapa span{display:none}}
+@media(max-width:760px){.boton-estado{height:38px;padding:0 9px;font-size:11px;gap:5px}.boton-estado>svg:last-child{display:none}.escena-operacion[data-modo=consulta] .acciones-mapa{left:124px!important;width:calc(100% - 136px)!important;max-width:calc(100% - 136px)!important;gap:7px!important}.escena-operacion[data-modo=consulta] .acciones-mapa>.buscador-pedido{margin-left:0;flex:1 1 100px;min-width:80px;width:auto!important}.acciones-mapa>.boton-herramientas-mapa{height:40px;min-width:36px;padding:0 9px!important;gap:0}.boton-herramientas-mapa>svg:last-child{display:none}.buscador-pedido>form{padding:0 8px;gap:6px}.buscador-pedido kbd{display:none}.sugerencias-pedidos{position:fixed;top:auto;left:12px;right:12px;width:auto;margin-top:8px;max-width:none}}
+
+@media(max-width:760px){.boton-estado{height:40px}}
+
+/* Leyenda: panel opaco, secciones separadas y rangos alineados. */
+.leyenda-abrir{display:flex;align-items:center;gap:8px;min-height:38px;padding:8px 12px;border:1px solid #d6e1eb;background:white;color:#445e77;font-size:12px;font-weight:600}
+.leyenda-panel{display:flex;flex-direction:column;width:620px;max-width:calc(100% - 32px);max-height:calc(100% - 32px);overflow:hidden;background:#fff!important;border:1px solid #d6e1eb;border-radius:16px!important;box-shadow:0 14px 45px #173b502b!important;color:#334b60;font-weight:400}
+.leyenda-cabecera{display:flex;align-items:center;gap:12px;flex-shrink:0;padding:18px 20px;border-bottom:1px solid #e7edf3;background:#fff}
+.leyenda-emblema{display:flex;align-items:center;justify-content:center;width:38px;height:38px;flex-shrink:0;border:1px solid #dce7f6;border-radius:11px;background:#edf4ff;color:#3866a3}
+.leyenda-cabecera>div:nth-child(2){flex:1;min-width:0}
+.leyenda-cabecera h2{font-size:16px;font-weight:700;letter-spacing:-.02em;color:#1e3e57}
+.leyenda-cabecera p{margin-top:3px;font-size:11px;line-height:1.5;color:#7b8da0}
+.leyenda-cabecera>button{display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;color:#72859b}
+.leyenda-cabecera>button:hover{background:#f0f4f8;color:#294663}
+.leyenda-contenido{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:16px 20px;scrollbar-width:thin;scrollbar-color:#cbd5e1 transparent}
+.leyenda-escala{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:10px 12px;margin-bottom:16px;border:1px solid #e4ebf2;border-radius:9px;background:#f8fafc;font-size:10px;line-height:1.5;color:#6b8094}
+.leyenda-escala>svg{color:#5277a1;flex-shrink:0}
+.leyenda-escala b{font-weight:600;color:#415f7b}
+.leyenda-rejilla{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:14px}
+.leyenda-bloque{min-width:0;padding:14px;border:1px solid #e5ebf1;border-radius:12px;background:white}
+.leyenda-bloque h3,.leyenda-incidencias h3{display:flex;align-items:center;gap:8px;margin-bottom:13px;font-size:12px;font-weight:700;color:#294c68}
+.leyenda-bloque h3>svg,.leyenda-incidencias h3>svg{color:#7790a8;flex-shrink:0}
+.leyenda-ejemplo{display:flex;align-items:center;gap:9px;margin-bottom:11px;font-size:11px;line-height:1.5}
+.leyenda-ejemplo b{display:block;font-size:11px;font-weight:600;color:#3d5b72}
+.leyenda-ejemplo small{display:block;font-size:10px;color:#7b8da0}
+.simbolo-almacen{display:flex;align-items:center;justify-content:center;width:28px;height:28px;flex-shrink:0;border:2px solid white;border-radius:7px;color:white;box-shadow:0 1px 4px #173b5026}
+.simbolo-almacen.central{background:#1d4ed8}.simbolo-almacen.intermedio{background:#059669}
+.leyenda-niveles{display:flex;flex-direction:column;gap:7px;padding-top:3px}
+.leyenda-nivel{display:flex;align-items:center;gap:7px;font-size:10px;line-height:1.5}
+.leyenda-nivel i{height:8px;width:8px;flex-shrink:0;border-radius:50%}
+.leyenda-nivel>span{flex:1;color:#5b7287}
+.leyenda-nivel>b{font-size:10px;font-weight:600;color:#385873;white-space:nowrap;font-variant-numeric:tabular-nums}
+.leyenda-nota{margin-top:11px;padding-top:9px;border-top:1px solid #eef2f6;font-size:10px;line-height:1.65;color:#7b8da0}
+.leyenda-tipos{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:10px}
+.leyenda-tipos>span{display:flex;align-items:center;gap:5px;font-size:10px;color:#526d84}
+.leyenda-tipos svg{width:15px;height:15px;color:#5b7690}
+.leyenda-texto{margin-bottom:10px;font-size:10px;line-height:1.65;color:#7b8da0}
+.leyenda-lineas{display:flex;flex-direction:column;gap:10px}
+.leyenda-lineas>div{display:flex;align-items:center;gap:7px;font-size:10px;line-height:1.5;color:#5b7287}
+.leyenda-lineas i{display:block;width:24px;flex-shrink:0;border-top:2px solid}
+.leyenda-lineas .recorrido{border-top:2px dashed #94a3b8}.leyenda-lineas .pendiente{border-top:2px dashed #b45309}
+.simbolo-seleccion{height:11px;width:11px;border:2px solid #1d4ed8;border-radius:50%;box-shadow:0 0 0 2px #bfdbfe}
+.leyenda-incidencias{margin-top:14px;padding:14px;border:1px solid #e5ebf1;border-radius:12px;background:#fbfcfe}
+.leyenda-eventos{display:flex;flex-wrap:wrap;gap:12px 16px}
+.leyenda-eventos>span{display:flex;align-items:center;gap:7px;font-size:10px;line-height:1.5;color:#5b7287}
+.leyenda-eventos b{display:inline-flex;align-items:center;justify-content:center;padding:2px 5px;border-radius:4px;font-size:9px;font-weight:700;color:white}
+.averia-uno{background:#c2410c}.averia-dos{background:#991b1b}.averia-tres{background:#581c87}
+.simbolo-bloqueo{width:22px;border-top:3px solid #dc2626}.punto-colapso{height:9px;width:9px;border-radius:50%;background:#dc2626}
+.leyenda-pie{display:flex;align-items:center;gap:7px;flex-shrink:0;padding:11px 20px;border-top:1px solid #e7edf3;background:#f8fafc;color:#8091a2;font-size:10px;line-height:1.5}
+.leyenda-pie>span{flex:1}.leyenda-pie kbd{padding:2px 5px;border:1px solid #dde5ec;border-radius:4px;background:white;font-size:9px;font-family:inherit}
+@media(max-width:760px){.leyenda-panel{width:620px;max-width:calc(100% - 24px);max-height:calc(100% - 24px)}.leyenda-cabecera{padding:14px}.leyenda-contenido{padding:12px 14px}.leyenda-pie{padding:10px 14px}.leyenda-rejilla{gap:10px}}
+
+.leyenda-texto,.leyenda-nota,.leyenda-nivel,.leyenda-lineas>div,.leyenda-eventos>span{font-size:11px}
+.leyenda-nivel>b{font-size:11px}.leyenda-ejemplo b{font-size:12px}.leyenda-ejemplo small{font-size:11px}.leyenda-tipos>span{font-size:11px}
+
+.leyenda-mapa{position:absolute;right:20px;bottom:20px;z-index:35}
+
+/* Organización final: navegación y utilidades en una barra; acciones del mapa en otra. */
+.toolbar-operativa{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;margin-top:12px;padding-top:10px;border-top:1px solid #edf1f5}
+.navegacion-paneles{display:flex;align-items:center;gap:3px;min-width:0;overflow-x:auto;scrollbar-width:thin;scrollbar-color:#d3dce7 transparent}
+.navegacion-paneles .botones-grupo>button{display:inline-flex;align-items:center;justify-content:center;gap:7px;flex-shrink:0;height:36px;min-height:36px;padding:0 11px;border:1px solid transparent;border-radius:8px;background:transparent;color:#64748b;font-size:12px;font-weight:500;box-shadow:none;white-space:nowrap}
+.navegacion-paneles .botones-grupo>button:hover{background:#f1f5f9;color:#365474}
+.navegacion-paneles .botones-grupo>button[aria-pressed=true]{background:#eaf2ff;border-color:#d4e3fa;color:#225db2;font-weight:650;box-shadow:none}
+.navegacion-paneles .botones-grupo>button>svg{width:15px;height:15px;flex-shrink:0}
+.utilidades-operativas{display:flex;align-items:center;gap:6px;padding-left:12px;border-left:1px solid #e4eaf1}
+.utilidades-operativas .utilidad-boton,.utilidades-operativas details>summary{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:36px;min-height:36px;padding:0 10px;border:1px solid #e0e7ef;border-radius:8px;background:#fff;color:#5a6e84;font-size:11px;font-weight:500;box-shadow:none;white-space:nowrap}
+.utilidades-operativas .utilidad-boton:hover,.utilidades-operativas details>summary:hover{background:#f6f9fc;border-color:#c9d7e6;color:#315b88}
+.utilidades-operativas .utilidad-boton[aria-expanded=true]{background:#edf4ff;border-color:#cbdcf5;color:#225db2}
+.opcion-compartir{display:flex;align-items:center;gap:12px;width:100%;min-height:44px;padding:9px 12px;text-align:left;border-radius:10px;font-size:12px;color:#46627b}
+.opcion-compartir:hover{background:#eff6ff}.opcion-compartir>svg{flex-shrink:0;color:#5b7ca1}
+.enlace-compartido{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;padding:10px 12px;border:1px solid #dbe7f5;border-radius:9px;background:#f4f8fe;font-size:11px;color:#506c89}
+.enlace-compartido input{flex:1;min-width:180px;padding:7px 9px;border:1px solid #d6e1ee;border-radius:6px;background:white;color:#315b88;font-size:12px}
+.enlace-compartido small{width:100%;font-size:10px;color:#7890a6}
+.boton-control-mapa{display:inline-flex!important;align-items:center;justify-content:center;gap:8px;height:40px!important;padding:0 12px!important;border:1px solid #cbdcf0!important;border-radius:10px!important;background:#edf4ff!important;color:#22528e!important;font-size:12px!important;font-weight:600!important;box-shadow:none!important}
+.boton-control-mapa:hover{background:#e3edff!important}
+.acciones-mapa>button:not(.boton-herramientas-mapa){height:40px!important;padding:0 12px!important;border-radius:10px!important;border-color:#dce5ef;font-size:12px!important;font-weight:500;box-shadow:none}
+.acciones-mapa>button.text-red-700{background:#fff7f7;border-color:#fed7d7;color:#b42332}
+.acciones-mapa>button.text-red-700>span{padding:1px 5px;border-radius:4px;font-size:10px}
+.escena-operacion[data-modo=operador] .acciones-mapa{left:180px!important;max-width:calc(100% - 192px)!important}
+@media(max-width:1200px){.toolbar-operativa{grid-template-columns:minmax(0,1fr);gap:8px}.utilidades-operativas{justify-content:flex-end;padding-left:0;border-left:0}.navegacion-paneles .botones-grupo>button{padding:0 9px}}
+@media(max-width:760px){.toolbar-operativa{margin-top:9px;padding-top:8px}.navegacion-paneles .botones-grupo>button{font-size:11px;height:34px;min-height:34px;padding:0 8px}.utilidades-operativas{gap:5px}.utilidades-operativas .utilidad-boton,.utilidades-operativas details>summary{height:34px;min-height:34px;padding:0 8px}.boton-control-mapa{font-size:11px!important;padding:0 9px!important}.escena-operacion[data-modo=operador] .acciones-mapa{left:12px!important;max-width:calc(100% - 24px)!important}.acciones-mapa>button:not(.boton-herramientas-mapa){font-size:10px!important;padding:0 9px!important}}
+
+.escena-operacion[data-control=abierto]{--alto-acciones:104px}
+.escena-operacion[data-control=abierto] .acciones-mapa{left:428px!important;max-width:calc(100% - 440px)!important}
+@media(max-width:760px){.escena-operacion[data-control=abierto] .acciones-mapa{display:none!important}}
+
+/* Jerarquía de acciones: control principal, búsqueda y operación, utilidades secundarias. */
+.boton-control-mapa{left:20px;background:#1d4ed8!important;border-color:#1d4ed8!important;color:#fff!important;font-weight:600!important}
+.boton-control-mapa:hover{background:#1e40af!important;border-color:#1e40af!important}
+.boton-estado{left:20px}
+.acciones-mapa>button.accion-incidencia{font-weight:600;background:#fff5f5;border-color:#f5d0d3;color:#b42332}
+.acciones-mapa>button.accion-parametros{margin-left:4px;background:transparent!important;border-color:transparent!important;color:#64748b;font-weight:500}
+.acciones-mapa>button.accion-parametros:hover{background:#f1f5f9!important;color:#315779}
+.acciones-mapa>button.accion-parametros[aria-label]{box-shadow:none}
+.acciones-mapa>.boton-herramientas-mapa{background:#f8fafc;color:#64748b;font-weight:400}
+@media(max-width:760px){.boton-control-mapa,.boton-estado{left:12px}.acciones-mapa>button.accion-parametros{margin-left:0}}
+
+@media(max-width:760px){.acciones-mapa>button{order:0!important}}
+
+/* Acciones a la izquierda; búsqueda independiente al extremo derecho. */
+.acciones-mapa>.buscador-pedido{order:0;margin-left:auto!important;flex:0 1 320px;width:320px}
+@media(min-width:761px){.acciones-mapa{flex-wrap:nowrap!important}.acciones-mapa>button{flex-shrink:0}.acciones-mapa>.buscador-pedido{min-width:160px}}
+@media(max-width:1100px) and (min-width:761px){.superficie-operacion[data-panel]:not([data-panel=ninguno]) .acciones-mapa{flex-wrap:wrap!important}.superficie-operacion[data-panel]:not([data-panel=ninguno]) .acciones-mapa>.buscador-pedido{flex-basis:100%;width:100%;margin-left:0!important}}
+@media(max-width:760px){.acciones-mapa{justify-content:flex-start!important}.acciones-mapa>button{order:0!important}.acciones-mapa>.buscador-pedido{order:1!important;flex:0 0 100%;width:100%!important;margin:0!important;min-width:0!important}.escena-operacion[data-modo=operador] .acciones-mapa>.accion-incidencia{margin-left:158px}.escena-operacion[data-modo=operador] .acciones-mapa>.accion-parametros:first-child{margin-left:158px}.escena-operacion[data-modo=consulta] .acciones-mapa{left:124px!important;max-width:calc(100% - 136px)!important;width:calc(100% - 136px)!important;flex-wrap:nowrap!important}.escena-operacion[data-modo=consulta] .acciones-mapa>.buscador-pedido{flex:1 1 100px;order:1!important;min-width:70px!important;width:auto!important}}
+
+@media(max-width:760px){.escena-operacion[data-modo=operador]{--alto-acciones:152px}.escena-operacion[data-modo=operador] .acciones-mapa{top:60px!important}.escena-operacion[data-modo=operador] .acciones-mapa>.accion-incidencia,.escena-operacion[data-modo=operador] .acciones-mapa>.accion-parametros:first-child{margin-left:0}}
+
+/* Grupo derecho: búsqueda seguida de tiempos y herramientas. */
+.acciones-mapa>.boton-herramientas-mapa{order:0;margin-left:0}
+@media(max-width:760px){.acciones-mapa>.boton-herramientas-mapa{order:1!important}.escena-operacion[data-modo=operador] .acciones-mapa>.buscador-pedido{flex:1 1 calc(100% - 44px);width:calc(100% - 44px)!important;max-width:calc(100% - 44px)}.escena-operacion[data-modo=consulta] .acciones-mapa>.buscador-pedido{max-width:none}}
+
+.utilidades-operativas .utilidad-carga{border-color:#cbdcf5;background:#edf4ff;color:#285a9c;font-weight:600}
+.utilidades-operativas .utilidad-carga:hover,.utilidades-operativas .utilidad-carga[aria-pressed=true]{border-color:#acc6ed;background:#e3edff;color:#1d4ed8}
+.carga-previa-simulacion{display:flex;align-items:center;gap:11px;width:100%;padding:13px;border:1px solid #cbdcf3;border-radius:12px;background:#f2f7ff;text-align:left;color:#315c96}
+.carga-previa-simulacion:hover{background:#e9f1ff;border-color:#adc9ed}
+.icono-carga-previa{display:flex;align-items:center;justify-content:center;width:36px;height:36px;flex-shrink:0;border-radius:9px;background:#e1ecfc;color:#386db2}
+.carga-previa-simulacion>span:nth-child(2){flex:1;min-width:0}
+.carga-previa-simulacion b{display:block;font-size:12px;font-weight:650}
+.carga-previa-simulacion small{display:block;margin-top:4px;font-size:10px;line-height:1.6;color:#6b85a8}
+@media(max-width:760px){.utilidades-operativas{flex-wrap:wrap;justify-content:flex-start}}
+
+/* Grupos de tareas: se conserva la paleta y se organiza por propósito. */
+.toolbar-operativa{align-items:end;gap:14px;margin-top:9px;padding-top:9px}
+.navegacion-paneles{gap:12px;align-items:stretch;overflow:visible}
+.grupo-accesos{display:flex;flex-direction:column;gap:4px;min-width:0}
+.rotulo-grupo{display:block;padding-left:9px;font-size:9px;font-weight:600;line-height:12px;letter-spacing:.065em;text-transform:uppercase;white-space:nowrap}
+.botones-grupo{display:flex;align-items:center;gap:3px;min-width:0}
+.grupo-separado{border-left:1px solid var(--borde);padding-left:12px}
+.utilidades-operativas{align-items:end;padding-left:0;border-left:0;gap:12px}
+.utilidades-operativas .botones-grupo{gap:6px}
+.navegacion-paneles .botones-grupo>button{height:34px;min-height:34px;padding-inline:9px}
+.utilidades-operativas .utilidad-boton,.utilidades-operativas details>summary{height:34px;min-height:34px}
+.contador-incidencias{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;border-radius:4px;font-size:9px;font-weight:650;line-height:1}
+@media(max-width:1200px){.toolbar-operativa{gap:9px}.navegacion-paneles{overflow-x:auto;padding-bottom:2px}.navegacion-paneles .grupo-accesos{flex-shrink:0}.utilidades-operativas{justify-content:flex-end}.grupo-preparacion{margin-right:0}}
+@media(max-width:760px){.rotulo-grupo{font-size:9px}.grupo-separado{padding-left:9px}.navegacion-paneles{gap:9px}.utilidades-operativas{justify-content:flex-start;gap:9px;flex-wrap:wrap}.botones-grupo{gap:2px}.navegacion-paneles .botones-grupo>button{padding-inline:7px}.utilidades-operativas .botones-grupo{gap:4px}}
+
+@media(min-width:1201px){.herramientas-v9:has(#contenido-barra-v9:not([hidden])){padding-top:10px;padding-bottom:10px}.rejilla-tiempos>div{padding-top:8px;padding-bottom:8px}}
+
+/* Main actions follow the role tabs; the map no longer reserves a duplicate row. */
+.barra-acciones-principal{display:flex;align-items:center;gap:16px;flex-shrink:0;position:relative;z-index:35;min-height:64px;padding:11px 16px;border-bottom:1px solid #e2e8f0;background:#fff}
+.barra-acciones-principal>.boton-control-mapa,.barra-acciones-principal>.boton-estado{position:static!important;flex-shrink:0;white-space:nowrap}
+.barra-acciones-principal .acciones-mapa{position:static!important;display:flex!important;flex:1;min-width:0;max-width:none!important;width:auto!important;justify-content:flex-start!important;flex-wrap:nowrap!important;gap:8px!important}
+.barra-acciones-principal .acciones-mapa>.buscador-pedido{flex:0 1 320px!important;width:320px!important;min-width:140px!important;margin-left:auto!important}
+.barra-acciones-principal .acciones-mapa>button{flex-shrink:0;margin-left:0!important}
+.barra-acciones-principal .boton-herramientas-mapa span{display:inline}
+.superficie-operacion .escena-operacion{--alto-acciones:0px}
+.barra-acciones-principal .sugerencias-pedidos{z-index:50}
+@media(max-width:760px){
+ .barra-acciones-principal{gap:8px;flex-wrap:wrap;padding:10px 12px}
+ .barra-acciones-principal .acciones-mapa{display:contents!important}
+ .barra-acciones-principal .acciones-mapa>.buscador-pedido{flex:1 1 65%!important;width:auto!important;min-width:140px!important;order:2!important;margin:0!important}
+ .barra-acciones-principal .acciones-mapa>.boton-herramientas-mapa{order:3!important;margin-left:auto!important}
+ .barra-acciones-principal .acciones-mapa>.boton-herramientas-mapa span{display:none}
+ .barra-acciones-principal .acciones-mapa>.accion-incidencia,.barra-acciones-principal .acciones-mapa>.accion-parametros{order:1!important}
+}
+
+/* One navigation baseline, distinct utilities, and progressive disclosure for configuration. */
+.toolbar-operativa{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-top:10px;padding-top:10px}
+.navegacion-simple{display:flex;align-items:center;gap:12px;min-width:0;overflow:visible}
+.navegacion-simple .botones-grupo{gap:2px}
+.navegacion-simple .botones-grupo>button{height:38px;min-height:38px;padding:0 10px;border-radius:8px;font-size:12px;font-weight:500}
+.navegacion-simple .botones-grupo>button[aria-pressed=true]{font-weight:650}
+.separador-navegacion{display:block;flex-shrink:0;width:1px;height:22px;background:#e4eaf1}
+.utilidades-simples{display:flex;align-items:center;gap:7px;flex-shrink:0;padding:0;border:0}
+.utilidades-simples>.utilidad-boton,.utilidades-simples details>summary{height:36px;min-height:36px;gap:7px;padding:0 10px;font-size:11px;border-radius:8px}
+.configuracion-opciones{position:absolute;right:0;top:calc(100% + 8px);z-index:50;width:250px;padding:7px;border:1px solid #e2e8f0;border-radius:12px;background:white;box-shadow:0 12px 32px #173b501c}
+.configuracion-opciones>p{padding:8px 10px;font-size:11px;font-weight:600;color:#64748b}
+.configuracion-opciones>button,.configuracion-opciones .preparacion-parametros>button{display:flex;align-items:center;gap:10px;width:100%;height:42px;min-height:42px;padding:0 10px;border:0;border-radius:7px;background:white;color:#475569;box-shadow:none;font-size:12px;font-weight:500;text-align:left}
+.configuracion-opciones button:hover{background:#eff6ff;color:#1d4ed8}
+.configuracion-opciones button svg{width:16px;height:16px;margin:0;flex-shrink:0}
+.barra-acciones-principal{min-height:60px;padding-block:9px}
+.barra-acciones-principal>.boton-control-mapa{height:38px!important}
+.herramientas-v9 .rejilla-tiempos>div{border-radius:10px}
+.herramientas-v9 .rejilla-tiempos>div>span{width:30px;height:30px;border-radius:8px}
+@media(max-width:1350px){.toolbar-operativa{flex-wrap:wrap;gap:8px}.utilidades-simples{margin-left:auto}.navegacion-simple{flex-wrap:wrap}}
+@media(max-width:760px){.toolbar-operativa{gap:9px}.navegacion-simple{gap:8px;width:100%}.navegacion-simple .botones-grupo{flex-wrap:wrap}.navegacion-simple .botones-grupo>button{padding:0 7px;min-height:36px;height:36px;font-size:11px}.navegacion-simple>.separador-navegacion{display:none}.utilidades-simples{flex-wrap:wrap;justify-content:flex-start;margin-left:0;padding-top:9px;border-top:1px solid #edf1f5;width:100%}.utilidades-simples>.separador-navegacion{display:none}.configuracion-opciones{right:0;max-width:calc(100vw - 24px)}}
+
+/* Navigation precedes context; time is supporting information rather than another action row. */
+.herramientas-v9 .toolbar-operativa{margin-top:0;padding-top:0;border-top:0;padding-bottom:10px}
+.contexto-temporal{padding-top:10px;border-top:1px solid #edf1f5}
+.contexto-temporal .rejilla-tiempos>div{padding:7px 11px!important;min-height:46px;gap:10px}
+.contexto-temporal .rejilla-tiempos>div>span{width:28px;height:28px}
+.contexto-temporal .rejilla-tiempos p:first-child{font-size:10px;font-weight:500}
+.contexto-temporal .rejilla-tiempos p:last-child{margin-top:2px;font-size:12px}
+.navegacion-simple .botones-grupo>button{position:relative;height:40px;min-height:40px;border:0;border-radius:6px;font-size:12px}
+.navegacion-simple .botones-grupo>button[aria-pressed=true]{background:#eaf2ff;color:#225db2}
+.navegacion-simple .botones-grupo>button[aria-pressed=true]::after{content:'';position:absolute;left:10px;right:10px;bottom:0;height:2px;border-radius:2px;background:#1d4ed8}
+.navegacion-simple button:focus-visible,.utilidades-simples summary:focus-visible,.utilidades-simples button:focus-visible{outline:2px solid #2563eb;outline-offset:3px}
+@media(max-width:760px){.herramientas-v9 .toolbar-operativa{padding-bottom:9px}.contexto-temporal{padding-top:9px}.navegacion-simple{gap:3px}.navegacion-simple .botones-grupo>button{height:36px;min-height:36px}.navegacion-simple .botones-grupo{gap:0}}
+
+/* Actions belong to the map; order lookup stays stable above navigation and side panels. */
+.descripcion-consulta{display:flex;align-items:center;gap:10px;flex-shrink:0;color:#64748b}
+.descripcion-consulta b{display:block;font-size:12px;font-weight:600;color:#334155}
+.descripcion-consulta span{display:block;margin-top:2px;font-size:11px;color:#64748b}
+.controles-contextuales-mapa{position:absolute;inset:0 0 auto;z-index:16;display:flex;align-items:center;gap:12px;min-height:52px;padding:7px 16px;background:#fff;border-bottom:1px solid #e2e8f0}
+.control-contextual{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:0 11px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;color:#475569;font-size:12px;font-weight:500;white-space:nowrap}
+.control-contextual:hover{background:#f8fafc;border-color:#cbd5e1}
+.control-contextual[aria-expanded=true]{background:#edf4ff;color:#225db2;border-color:#cbdcf5}
+.control-incidencia{border-color:transparent;color:#b42332}
+.control-incidencia:hover{background:#fff5f5;border-color:#f5d0d3}
+.control-contextual:focus-visible{outline:2px solid #2563eb;outline-offset:3px}
+.superficie-operacion .escena-operacion{--alto-acciones:52px}
+.panel-control-operacion{top:52px!important}
+#resumen-estado-operacion{top:64px!important}
+@media(max-width:760px){.descripcion-consulta{flex:1 1 100%}.descripcion-consulta span{display:none}.descripcion-consulta>svg{display:none}.barra-acciones-principal{gap:7px}.controles-contextuales-mapa{gap:6px;padding-inline:12px}.control-contextual{font-size:11px;padding:0 9px;gap:6px}}
+
+/* Final hierarchy: navigation, time context, then actions and lookup attached to the map. */
+.controles-contextuales-mapa{justify-content:space-between;gap:20px;padding-block:8px;min-height:58px}
+.acciones-contextuales{display:flex;align-items:center;gap:12px;flex-shrink:0}
+.consulta-contextual{display:flex;align-items:center;gap:8px;min-width:0;margin-left:auto}
+.consulta-contextual>.buscador-pedido{width:320px;min-width:180px;max-width:100%}
+.consulta-contextual .buscador-pedido>form{height:38px}
+.consulta-contextual>.boton-herramientas-mapa{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:38px;padding:0 11px;border:1px solid #e0e6ed;border-radius:8px;background:#f8fafc;color:#64748b;font-size:11px;white-space:nowrap}
+.superficie-operacion .escena-operacion{--alto-acciones:58px}
+.panel-control-operacion{top:58px!important}
+#resumen-estado-operacion{top:70px!important}
+@media(max-width:760px){.controles-contextuales-mapa{flex-wrap:wrap;gap:8px;padding:9px 12px;min-height:102px}.acciones-contextuales{gap:6px}.consulta-contextual{width:100%;margin:0}.consulta-contextual>.buscador-pedido{width:auto;flex:1;min-width:0}.consulta-contextual>.boton-herramientas-mapa{width:38px;padding:0;flex-shrink:0}.consulta-contextual>.boton-herramientas-mapa span,.consulta-contextual>.boton-herramientas-mapa svg:last-child{display:none}.superficie-operacion .escena-operacion{--alto-acciones:102px}.panel-control-operacion{top:102px!important}#resumen-estado-operacion{top:114px!important}}
+
+/* Time details are available on demand; they do not reserve a separate row. */
+.herramientas-v9 .toolbar-operativa{padding-bottom:0}
+.detalle-tiempos{position:relative;flex-shrink:0}
+.utilidades-simples .detalle-tiempos>summary{background:#f8fafc;color:#64748b;border-color:#e2e8f0;white-space:nowrap}
+.detalle-tiempos[open]>summary{background:#edf4ff;color:#225db2;border-color:#cbdcf5}
+.detalle-tiempos[open]>summary>svg:last-child{transform:rotate(180deg)}
+.popover-tiempos{position:absolute;right:0;top:calc(100% + 9px);z-index:55;width:320px;max-width:calc(100vw - 24px);padding:16px;border:1px solid #e2e8f0;border-radius:12px;background:#fff;box-shadow:0 12px 32px #173b501c;color:#334155}
+.encabezado-tiempos{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.encabezado-tiempos h2{margin:0;font-size:13px;font-weight:650;color:#0f172a}
+.encabezado-tiempos p{margin-top:4px;font-size:11px;line-height:1.5;color:#64748b}
+.encabezado-tiempos button{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:6px;color:#64748b;flex-shrink:0}
+.encabezado-tiempos button:hover{background:#f1f5f9}
+.popover-tiempos dl{margin-top:12px}
+.popover-tiempos dl>div{padding:12px 0;border-top:1px solid #edf1f5}
+.popover-tiempos dt{display:flex;align-items:center;gap:8px;font-size:11px;color:#64748b}
+.popover-tiempos dd{margin-top:6px;margin-left:24px;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:#334155}
+.nota-tiempos{padding-top:10px;border-top:1px solid #edf1f5;font-size:11px;line-height:1.6;color:#64748b}
+@media(max-width:760px){.detalle-tiempos{position:static}.popover-tiempos{right:12px;left:12px;top:calc(100% + 6px);width:auto;max-width:none}}
+
+/* Order details overlay the map and never participate in toolbar sizing. */
+.panel-resultado-pedido{position:absolute;top:calc(100% + 8px);right:0;z-index:50;width:100%;max-height:min(480px,55dvh);overflow-y:auto;overscroll-behavior:contain;border-radius:12px;box-shadow:0 12px 32px #173b501c;overflow-wrap:anywhere;background:white}
+.panel-resultado-pedido dd{min-width:0}
+@media(max-width:760px){.panel-resultado-pedido{position:fixed;top:auto;bottom:12px;left:12px;right:12px;width:auto;max-height:55dvh;z-index:55}}
+
+.reproduccion-suavizada{padding-left:7px;border-left:1px solid #e2e8f0;font-size:10px;font-weight:400;color:#64748b;white-space:nowrap}

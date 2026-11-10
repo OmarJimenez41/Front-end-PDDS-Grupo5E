@@ -60,8 +60,9 @@ export function unidadCumple(u: UnidadOperativa, filtros:FiltrosV9, mapa:Instant
   const [a,b]=filtros.distancia.split(':').map(Number);return km>=a && km<b
 }
 export function resumenGlobal(mapa:InstantaneaOperacion|null,detalle:UnidadesOperacion|null) {
-  const carga=detalle?.unidades.reduce((t,u)=>t+u.carga,0) ?? null
-  const capacidad=detalle?.unidades.reduce((t,u)=>t+u.capacidad,0) ?? 0
+  const flota=mapa?.fisico?.vehiculos??detalle?.unidades
+  const carga=flota?.reduce((t,u)=>t+u.carga,0) ?? null
+  const capacidad=flota?.reduce((t,u)=>t+u.capacidad,0) ?? 0
   const finitos=mapa?.fisico?.almacenes.filter(a=>!a.central && a.capacidad!=null && a.stock!=null) ?? []
   const stock=finitos.reduce((t,a)=>t+a.stock!,0),capacidadStock=finitos.reduce((t,a)=>t+a.capacidad!,0)
   return {carga,capacidad,ocupacion:carga==null || capacidad<=0?null:carga*100/capacidad,stock,capacidadStock,

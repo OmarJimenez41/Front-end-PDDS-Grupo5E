@@ -1,0 +1,28 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript')
+require.extensions['.ts']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,f)
+const {agruparCercanas}=require('../lib/operacion/agrupacionMapa.ts')
+const unidades=[{id:3,x:50,y:40},{id:2,x:10.5,y:10},{id:1,x:10,y:10}]
+const copia=JSON.stringify(unidades),grupos=agruparCercanas(unidades,1000,500,1,null)
+assert.deepEqual([...grupos.values()].map(g=>g.map(v=>v.id)),[[1,2],[3]])
+assert.deepEqual([...agruparCercanas([...unidades].reverse(),1000,500,1,null).keys()],[...grupos.keys()])
+assert.equal(agruparCercanas(unidades,1000,500,8,null).size,3,'El zoom separa símbolos que ya no se solapan')
+assert.equal(agruparCercanas(unidades,1000,500,1,1).size,3,'La selección no desaparece dentro de un contador')
+assert.equal(JSON.stringify(unidades),copia,'Nunca modifica coordenadas ni orden de los datos originales')
+assert.ok([...grupos.values()].every(g=>g.every(v=>unidades.includes(v))),'Conserva las posiciones físicas originales')
+console.log('Agrupación: proximidad en pantalla, zoom, selección, orden estable y coordenadas intactas correctos')
+
+const {prepararRutas,rutasEnHora}=require('../lib/operacion/escenaMapa.ts')
+const trazado=[{x:0,y:0,instanteH:0},{x:1,y:0,instanteH:1},{x:2,y:0,instanteH:2},{x:2,y:0,instanteH:3},{x:2,y:1,instanteH:4},{x:2,y:2,instanteH:5},{x:2,y:1,instanteH:6}]
+const r={id:1,vehiculoId:1,tipoVehiculo:'AUTO',horaInicioH:0,horaFinH:6,trazado},original=JSON.stringify(trazado),preparadas=prepararRutas({rutas:[r]})
+assert.deepEqual(preparadas[0].puntos,[[0,0],[2,0],[2,2],[2,1]],'Conserva giros y cambios de sentido')
+assert.deepEqual(rutasEnHora(preparadas,1.5,true)[0].porRecorrer,[[1.5,0],[2,0],[2,2],[2,1]])
+assert.deepEqual(rutasEnHora(preparadas,2.5,true)[0].porRecorrer[0],[2,0],'Conserva la espera real')
+assert.deepEqual(rutasEnHora(preparadas,5.5,true)[0].porRecorrer,[[2,1.5],[2,1]],'Conserva el regreso por el mismo tramo')
+assert.equal(JSON.stringify(trazado),original,'No altera los puntos y horarios fuente')
+console.log('Geometría: giros, espera, reversa y horarios conservados')
+
+const {unidadesEnPunto}=require('../lib/operacion/agrupacionMapa.ts')
+assert.deepEqual(unidadesEnPunto(unidades,1,1000,500,1).map(v=>v.id),[1,2])
+assert.deepEqual(unidadesEnPunto(unidades,1,1000,500,8).map(v=>v.id),[1])
+assert.equal(JSON.stringify(unidades),copia,'La consulta de superpuestos no desplaza las figuras')
+console.log('Consulta de superposición: figuras y coordenadas conservadas, selección ajustada al zoom')

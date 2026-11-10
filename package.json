@@ -8,13 +8,17 @@
     "start": "next start",
     "test:operacion": "node tests/lectura-operacion.cjs",
     "test:correcciones": "node tests/correcciones-v9.cjs",
-    "test:revision": "node tests/lectura-operacion.cjs && node tests/mejoras-v9.cjs && node tests/correcciones-v9.cjs && node tests/revision-nov05.cjs && node tests/reporte-colapso.cjs"
+    "test:revision": "node tests/lectura-operacion.cjs && node tests/mejoras-v9.cjs && node tests/correcciones-v9.cjs && node tests/revision-nov05.cjs && node tests/reporte-colapso.cjs && node tests/seleccion-escenario.cjs",
+    "test:movimiento": "node tests/movimiento-continuo.cjs && node tests/reproduccion-movimiento.cjs",
+    "test:mapa": "node tests/agrupacion-mapa.cjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
     "@vercel/analytics": "1.6.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.9",
     "lucide-react": "^1.16.0",
     "next": "16.3.0",
     "react": "19.2.4",

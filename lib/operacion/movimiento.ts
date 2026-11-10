@@ -36,7 +36,7 @@ export function movimientoPermitido(anterior: InstantaneaOperacion | null, actua
     anterior.fisico && actual.fisico && actual.relojH > anterior.relojH)
 }
 
-/** Camino comprobado entre lecturas. En un cambio de plan solo permite la misma arista residual física. */
+/** Camino físico comprobado entre lecturas, con esperas y cambios de viaje. */
 export function trayectoriaConfirmada(anterior:InstantaneaOperacion,actual:InstantaneaOperacion,id:number):Arista[]|null{
  const a=anterior.fisico?.vehiculos.find(v=>v.id===id),b=actual.fisico?.vehiculos.find(v=>v.id===id)
  if(!a||!b)return null
@@ -49,8 +49,10 @@ export function trayectoriaConfirmada(anterior:InstantaneaOperacion,actual:Insta
   return tramoConfirmado(aristas,anterior.relojH,actual.relojH,pa,pb)?aristas:null
  }
  if(actual.plan?.id!=null&&actual.plan.id===anterior.plan?.id){
-  const ruta=actual.plan.rutas.find(r=>r.vehiculoId===id&&r.horaInicioH<=anterior.relojH&&r.horaFinH>=actual.relojH)
-  if(ruta){const validado=comprobar(ruta.trayectoria);if(validado)return validado}
+  const rutas=[...anterior.plan!.rutas,...actual.plan.rutas]
+   .filter(r=>r.vehiculoId===id&&r.horaFinH>=anterior.relojH&&r.horaInicioH<=actual.relojH)
+  const camino=unirTrayectorias(...rutas.map(r=>r.trayectoria))
+  const validado=comprobar(camino);if(validado)return validado
  }
  const corte=actual.plan?.instanteH
  if(actual.plan&&anterior.plan&&actual.plan.id!==anterior.plan.id&&corte!=null&&Number.isFinite(corte)&&corte>=anterior.relojH&&corte<=actual.relojH){
@@ -81,4 +83,21 @@ export function animarIntervalo(pintar: (fraccion: number) => void, solicitar: (
   }
   cuadro = solicitar(paso)
   return () => { activo = false; cancelar(cuadro) }
+}
+
+/** Deduplica sin ocultar bifurcaciones: un solapamiento incompatible se rechaza al validar. */
+export function unirTrayectorias(...caminos:Arista[][]):Arista[]{
+ return [...new Map(caminos.flat().map(a=>[[a.x1,a.y1,a.x2,a.y2,a.salidaH,a.llegadaH].join(':'),a])).values()]
+  .sort((a,b)=>a.salidaH-b.salidaH||a.llegadaH-b.llegadaH)
+}
+export function crearEvaluador(aristas:Arista[]){
+ if(!aristas.length||!puntoCertificado(aristas,aristas[0].salidaH))return null
+ return (hora:number):{x:number;y:number;direccion:number|null}|null=>{
+  if(hora<aristas[0].salidaH||hora>aristas[aristas.length-1].llegadaH)return null
+  let lo=0,hi=aristas.length-1
+  while(lo<hi){const medio=(lo+hi)>>1;if(aristas[medio].llegadaH<hora)lo=medio+1;else hi=medio}
+  const a=aristas[lo],f=Math.max(0,Math.min(1,(hora-a.salidaH)/(a.llegadaH-a.salidaH)))
+  const direccion=hora<a.salidaH||hora>=a.llegadaH||(a.x1===a.x2&&a.y1===a.y2)?null:Math.atan2(-(a.y2-a.y1),a.x2-a.x1)*180/Math.PI
+  return {x:a.x1+(a.x2-a.x1)*f,y:a.y1+(a.y2-a.y1)*f,direccion:direccion===0?0:direccion}
+ }
 }

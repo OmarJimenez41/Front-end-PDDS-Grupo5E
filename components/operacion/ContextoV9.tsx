@@ -5,6 +5,8 @@ import { filtrosIniciales, limitesFlota, type FiltrosV9 } from '../../lib/operac
 import type { InstantaneaOperacion, UnidadesOperacion, RutaPlan } from '../../lib/api/operacion'
 export type PanelActivo='flota'|'almacenes'|'envios'|'incidencias'|'datos'|'reportes'|'indicadores'|null
 interface Contexto {
+ herramientasVisibles:boolean;setHerramientasVisibles:(v:boolean|((prev:boolean)=>boolean))=>void
+ conexion:string;recibidoEn:number|null
  consultaEnvios:{vehiculoId:number}|null;setConsultaEnvios:(v:{vehiculoId:number}|null)=>void
  panelActivo:PanelActivo;setPanelActivo:(p:PanelActivo)=>void
  filtros:FiltrosV9; setFiltros:(v:FiltrosV9)=>void
@@ -15,9 +17,10 @@ interface Contexto {
  almacenSeleccionado:string|null
  enfoque:{x:number;y:number;clave:number}|null;setEnfoque:(p:{x:number;y:number;clave:number}|null)=>void
 }
-const Ctx=createContext<Contexto>({consultaEnvios:null,setConsultaEnvios:()=>{},panelActivo:'flota',setPanelActivo:()=>{},filtros:filtrosIniciales,setFiltros:()=>{},limites:limitesFlota,setLimites:()=>{},mapa:null,unidades:null,rutaProducto:null,setRutaProducto:()=>{},rutasConsulta:[],setRutasConsulta:()=>{},almacenSeleccionado:null,enfoque:null,setEnfoque:()=>{}})
+const Ctx=createContext<Contexto>({herramientasVisibles:true,setHerramientasVisibles:()=>{},conexion:'cargando',recibidoEn:null,consultaEnvios:null,setConsultaEnvios:()=>{},panelActivo:'flota',setPanelActivo:()=>{},filtros:filtrosIniciales,setFiltros:()=>{},limites:limitesFlota,setLimites:()=>{},mapa:null,unidades:null,rutaProducto:null,setRutaProducto:()=>{},rutasConsulta:[],setRutasConsulta:()=>{},almacenSeleccionado:null,enfoque:null,setEnfoque:()=>{}})
 export const useV9=()=>useContext(Ctx)
-export function ContextoV9({children,mapa,unidades,almacenSeleccionado=null}:{children:ReactNode;mapa:InstantaneaOperacion|null;unidades:UnidadesOperacion|null;almacenSeleccionado?:string|null}) {
+export function ContextoV9({children,mapa,unidades,conexion='cargando',recibidoEn=null,almacenSeleccionado=null}:{children:ReactNode;conexion?:string;recibidoEn?:number|null;mapa:InstantaneaOperacion|null;unidades:UnidadesOperacion|null;almacenSeleccionado?:string|null}) {
+ const [herramientasVisibles,setHerramientasVisibles]=useState(true)
  const [consultaEnvios,setConsultaEnvios]=useState<{vehiculoId:number}|null>(null)
  const [panelActivo,setPanelActivo]=useState<PanelActivo>(null)
  useEffect(()=>{const cerrar=(e:KeyboardEvent)=>{if(e.key==='Escape')setPanelActivo(null)};document.addEventListener('keydown',cerrar);return()=>document.removeEventListener('keydown',cerrar)},[])
@@ -35,5 +38,17 @@ export function ContextoV9({children,mapa,unidades,almacenSeleccionado=null}:{ch
   if(mapa.fisico.vehiculos.some(v=>inicial.current?.posiciones.get(v.id)!==JSON.stringify(v.residual?[v.residual.x,v.residual.y]:[v.x,v.y])))confirmarMovimiento(mapa.escenarioId,performance.now())
   return()=>{cancelAnimationFrame(cuadro);cancelAnimationFrame(siguiente)}
  },[mapa])
- return <Ctx.Provider value={{consultaEnvios,setConsultaEnvios,panelActivo,setPanelActivo,filtros,setFiltros,limites,setLimites,mapa,unidades,rutaProducto,setRutaProducto,rutasConsulta,setRutasConsulta,almacenSeleccionado,enfoque,setEnfoque}}>{children}</Ctx.Provider>
+ return <Ctx.Provider value={{herramientasVisibles,setHerramientasVisibles,conexion,recibidoEn,consultaEnvios,setConsultaEnvios,panelActivo,setPanelActivo,filtros,setFiltros,limites,setLimites,mapa,unidades,rutaProducto,setRutaProducto,rutasConsulta,setRutasConsulta,almacenSeleccionado,enfoque,setEnfoque}}>{children}</Ctx.Provider>
+}
+
+/** Reserva espacio para la consulta sin cubrir el objetivo del mapa. */
+export function SuperficieOperacion({children}:{children:ReactNode}){
+ const ctx=useV9()
+ return <div className="superficie-operacion relative min-h-0 flex-1" data-panel={ctx.panelActivo??'ninguno'}>{children}</div>
+}
+
+export function BotonHerramientasMapa(){
+ const ctx=useV9()
+ if(ctx.herramientasVisibles)return null
+ return <button className="boton-herramientas-mapa" aria-label="Mostrar tiempos y herramientas" title="Mostrar tiempos y herramientas" aria-expanded={false} onClick={()=>ctx.setHerramientasVisibles(true)}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg><span>Tiempos y herramientas</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
 }
