@@ -1,0 +1,12 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript')
+require.extensions['.ts']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,f)
+const {crearReportePdf,crearManifiestoPdf}=require('../lib/operacion/reportePdf.ts')
+const hora=h=>`09/11/2026 ${String(Math.floor(h)%24).padStart(2,'0')}:30`
+const paradas=Array.from({length:90},(_,i)=>({codigoPedido:`PED-${i+1}`,pedidoId:i+1,cantidad:12,entregaId:i+1,etaH:9+i/10}))
+const r={escenarioId:9,versionEstado:991,relojH:20,estado:'EN_EJECUCION',generadoEn:'2026-11-09T20:00:00Z',planAplicable:true,cierreDefinitivo:false,criterioEstabilidad:'Certificado de factibilidad del plan conservado antes de este corte.',pedidos:paradas.map((p,i)=>({id:p.pedidoId,codigo:p.codigoPedido,posX:i%70,posY:i%50,cantidad:12,estado:i<50?'ENTREGADO':'PENDIENTE'})),paquetes:paradas.map(p=>({pedidoId:p.pedidoId,entregaId:p.entregaId,primero:1,ultimo:12})),incidencias:[],fisico:{vehiculos:[{id:1,codigo:'TM01',capacidad:40}],almacenes:[{id:1,codigo:'Central'}]},acumulado:{distanciaKm:114.3,entregas:50,costo:24},ultimaPlanificacionEstable:{id:42,distanciaTotalKm:150,rutas:[{id:11,vehiculoId:1,almacenId:1,horaInicioH:8,horaFinH:22,paradas}]}}
+const pdf=crearReportePdf(r,hora);assert.ok(pdf.getNumberOfPages()>3);assert.equal(Buffer.from(pdf.output('arraybuffer')).subarray(0,4).toString(),'%PDF')
+const m={carpeta:'datos',generadoEn:r.generadoEn,huella:'f'.repeat(64),archivos:[{nombre:'ventas202609.txt',periodo:'2026-09',tipo:'VENTAS',bytes:54000,sha256:'a'.repeat(64),registrosEnArchivo:400,leidos:399,invalidos:1,completo:true,vigente:true}],cobertura:{ventas:['2026-09'],huecosVentas:[]},avisos:['Un registro inválido en el archivo de ventas.']}
+const manifiesto=crearManifiestoPdf(m);assert.ok(manifiesto.getNumberOfPages()>0)
+const vacio=crearReportePdf({...r,pedidos:[],paquetes:[],ultimaPlanificacionEstable:null,acumulado:null},hora);assert.ok(vacio.getNumberOfPages()>0)
+if(process.env.PDF_QA_DIR){fs.mkdirSync(process.env.PDF_QA_DIR,{recursive:true});for(const [nombre,doc] of [['reporte',pdf],['rutas',crearReportePdf(r,hora,null,true)],['manifiesto',manifiesto],['vacio',vacio]])fs.writeFileSync(`${process.env.PDF_QA_DIR}/${nombre}.pdf`,Buffer.from(doc.output('arraybuffer')))}
+console.log('PDF: documento válido, tablas extensas paginadas, rutas, manifiesto y valores ausentes correctos')

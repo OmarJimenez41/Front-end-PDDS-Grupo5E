@@ -1,4 +1,5 @@
 'use client'
+import {PanelTrabajoV9} from './PanelTrabajoV9'
 import {useEffect,useState,useRef} from 'react'
 import type {InstantaneaOperacion,Pedido,UnidadesOperacion} from '../../lib/api/operacion'
 import {pedir} from '../../lib/api/simulacion'
@@ -28,8 +29,8 @@ export function PanelEnvios({mapa,unidades,historial,estadoHistorial,estadoMapa,
  const envios=(modo==='pedidos'?filtrarPedidosCompletos:filtrarEnvios)(datos?.envios??[],vista,corte,ventana,almacen).filter(e=>!ctx.consultaEnvios||(e.vehiculoId===ctx.consultaEnvios.vehiculoId&&e.estado!=='ENTREGADO')).filter(e=>{const q=busqueda.trim().toLowerCase();return !q||e.codigoPedido.toLowerCase().includes(q)||e.productos.some(p=>contieneProducto(p,q))})
  const almacenes=(mapa?.fisico?.almacenes??[]).filter(a=>(almacen==='todos'||a.codigo===almacen)&&(ctx.filtros.luzAlmacen==='todos'||luzStock(a.central?null:a.capacidad&&a.stock!=null?100*a.stock/a.capacidad:null,u.stock)===ctx.filtros.luzAlmacen))
  const estados:Record<string,string>={ENTREGADO:'Entregado',EN_SERVICIO:'En entrega',EN_TRANSITO:'En tránsito',POR_SALIR:'Por salir',PENDIENTE_REPLANIFICACION:'Pendiente de replanificar'}
- return <div className="panel-trabajo-v9 absolute inset-y-3 right-3 z-30 text-xs">{!abierto?null:<section aria-label="Envíos y almacenes" className="h-full w-[480px] max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
- <div className="flex justify-between"><h2 className="font-bold">Envíos, productos y almacenes</h2><button className="rounded border px-2" onClick={()=>setAbierto(false)}>Cerrar</button></div>
+ if(!abierto)return null
+ return <PanelTrabajoV9 titulo={'Envíos, productos y almacenes'} descripcion="Seguimiento de pedidos, parciales y movimientos.">
 <p className="mt-2 text-slate-500">Corte: {hora(corte)} · mapa {estadoMapa} · historial {estadoHistorial}</p><p role="status" className="text-amber-900">{error}</p>
  {datos&&!datos.planAplicable&&<p className="my-2 rounded bg-amber-50 p-2 text-amber-900">El último plan está pendiente de actualización. Se distinguen sus asignaciones de las entregas físicas confirmadas.</p>}
  {ctx.consultaEnvios&&<p className="mt-2 rounded-xl bg-blue-50 p-3 text-blue-800">Productos pendientes de {unidades?.unidades.find(u=>u.id===ctx.consultaEnvios?.vehiculoId)?.codigo??`UT ${ctx.consultaEnvios.vehiculoId}`} · <button className="underline" onClick={()=>ctx.setConsultaEnvios(null)}>Ver todas las UT</button></p>}
@@ -51,5 +52,5 @@ export function PanelEnvios({mapa,unidades,historial,estadoHistorial,estadoMapa,
  <details open={modo==='productos'}><summary className="mt-2 cursor-pointer font-semibold">Identificadores de producto · {e.cantidad}</summary>{e.productos.map((p,i)=><div key={i} className="mt-1 rounded bg-white p-2"><button onClick={()=>seleccionar(e)} className="text-left text-blue-700 underline" aria-label={`Ver ruta de productos P${p.pedidoId}-${p.primero} a P${p.pedidoId}-${p.ultimo}`}>P{p.pedidoId}-{p.primero} a P{p.pedidoId}-{p.ultimo}</button><span> · {p.ultimo-p.primero+1} productos</span></div>)}<ProductosDelEnvio envio={e} onElegir={codigo=>{setProducto(codigo);seleccionar(e)}}/></details>
  </article>)}
  <div className="mt-3 border-t pt-3"><h3 className="font-bold">Localizar un producto en todos los movimientos</h3><p className="text-slate-500">Identificadores internos Ppedido-ordinal. La búsqueda ignora la ventana actual y enfoca su ruta registrada.</p><div className="mt-2 flex"><input aria-label="Buscar producto unitario" className="min-w-0 flex-1 rounded-l border p-2" placeholder="Ejemplo P123-1" value={producto} onChange={e=>setProducto(e.target.value)}/><button className="rounded-r border px-3" onClick={buscarProducto}>Buscar</button></div></div>
- </section>}</div>
+ </PanelTrabajoV9>
 }

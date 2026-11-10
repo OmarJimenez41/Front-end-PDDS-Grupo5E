@@ -1,4 +1,5 @@
 'use client'
+import {PanelTrabajoV9} from './PanelTrabajoV9'
 import {useMemo,useState} from 'react'
 import type {Incidencia,UnidadOperativa} from '../../lib/api/operacion'
 import type {EstadoDetalle} from '../../lib/operacion/lectura'
@@ -25,9 +26,8 @@ export function PanelFlota({unidades,detalle,hora,seleccion,onSeleccion,incidenc
  const n=(v:number|null|undefined)=>v==null?'No disponible':v.toFixed(1)
  const valorOrden=(u:Extendida)=>{const v=u[campo];return v==null?'No disponible':campo.endsWith('H')?hora(v):n(v)+(campo==='ocupacionPct'?' %':campo.endsWith('Min')?' min':' km')}
  const opciones:[Orden,string][]=[['ocupacionPct','Ocupación'],['salidaH','Salida del origen'],['llegadaDestinoH','Llegada al próximo destino'],['llegadaH','Retorno de ruta'],['destinoKm','Km hasta destino'],['origenKm','Km desde origen'],['recorridoKm','Km recorridos acumulados'],['destinoMin','Min hasta destino'],['origenMin','Min desde salida']]
- return <div className="panel-trabajo-v9 absolute inset-y-3 right-3 z-30 max-w-[calc(100%-1.5rem)] text-xs">
- {ctx.panelActivo!=='flota'?null:<section aria-label="Flota operativa" className="h-full w-[420px] max-w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
- <div className="flex justify-between"><h2 className="font-bold">Flota operativa ({unidades?.length??0})</h2><button className="border px-2" onClick={()=>{ctx.setPanelActivo(null);onSeleccion(null)}}>Cerrar</button></div>
+ if(ctx.panelActivo!=='flota')return null
+ return <PanelTrabajoV9 titulo={`Flota operativa (${unidades?.length??0})`} descripcion="Ocupación, trayectos y productos de cada unidad." onCerrar={()=>onSeleccion(null)}>
  {detalle!=='actual'&&<p role="status" className="mt-2 bg-amber-50 p-2 text-amber-900">Detalle {detalle==='pendiente'?'pendiente de sincronización':'desactualizado'}. Los filtros conservan el último dato recibido.</p>}
  {unidades&&!flotaOficial(unidades)&&<p className="text-amber-900">Composición distinta de la flota oficial 37 (10 autos, 15 motos, 12 bicicletas).</p>}
  {ctx.mapa&&!ctx.mapa.aplicable&&<p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-amber-900">Distancias y horarios estimados del último plan publicado, pendiente de actualización. Las posiciones y cargas proceden del estado físico.</p>}
@@ -48,5 +48,5 @@ export function PanelFlota({unidades,detalle,hora,seleccion,onSeleccion,incidenc
  <h3 className="mt-2 font-bold">{ficha.estado==='PROGRAMADA'?'Pedidos programados':'Pedidos y parciales asociados'}</h3>{ficha.pedidos.map((p,i)=><p key={`${p.id}-${i}`}><button className="text-blue-700 underline" onClick={()=>onPedido(p.codigo)}>{p.codigo}</button> · {p.cantidad} unidades · ETA {p.etaH==null?'Sin asignación':hora(p.etaH)}</p>)}
  {ficha.averia&&<p>Avería tipo {ficha.averia.tipo} desde {hora(ficha.averia.desdeH)} hasta {ficha.averia.hastaH==null?'Sin fin':hora(ficha.averia.hastaH)}</p>}{incidencias.filter(i=>i.tipo==='MANTENIMIENTO'&&i.vehiculoId===ficha.id).map(i=><p key={i.id}>Mantenimiento desde {hora(i.instanteH)} hasta {i.finH==null?'Sin fin':hora(i.finH)}</p>)}
  </div>}{seleccion!=null&&unidades&&!ficha&&<p>La unidad seleccionada ya no está disponible.</p>}
- </section>}</div>
+ </PanelTrabajoV9>
 }

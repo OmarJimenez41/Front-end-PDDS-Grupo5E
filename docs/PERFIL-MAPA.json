@@ -1,0 +1,13 @@
+{
+  "tipo": "Carga sintética local; cálculo geométrico, agrupación y cadenas SVG. No mide React, DOM, GPU ni FPS reales.",
+  "unidades": 37,
+  "tramosPorRuta": 2000,
+  "verticesFuente": 74037,
+  "verticesDibujo": 1110,
+  "cuadrosMedidos": 120,
+  "preparacionMs": 7.663000000000011,
+  "medianaMs": 0.12649999999996453,
+  "p95Ms": 0.2255999999999858,
+  "maximoMs": 0.4479999999999791,
+  "caracteresProcesados": 968152
+}
