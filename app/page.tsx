@@ -166,7 +166,7 @@ const TEXTO_SEMAFORO = { 'vacío': 'text-slate-700', verde: 'text-emerald-700', 
 const ETIQUETA_ESTADO: Record<EstadoPedido, string> = { PENDIENTE: 'Pendiente de asignar', ASIGNADO: 'Asignado a una ruta', EN_RUTA: 'En ruta', ENTREGADO: 'Entregado', NO_ENTREGADO: 'No entregado' }
 
 // Buscador de pedidos por código (CU de consulta): resalta el pedido en el mapa y muestra su ficha
-function BuscarPedido({ rastreo, buscado, setBuscado, hora, onUnidad }: { rastreo: PedidoRastreo[]; buscado: string | null; setBuscado: (c: string | null) => void; hora: (h: number) => string; onUnidad: (id: number) => void }) {
+function BuscarPedido({ rastreo, buscado, setBuscado, hora, onUnidad }: { rastreo: PedidoRastreo[]; buscado: string | null; setBuscado: (c: string | null) => void; hora: (h: number) => string; onUnidad: (id: number | null) => void }) {
   const v9=useV9()
   const [texto,setTexto]=useState(''),[lista,setLista]=useState(false),[activo,setActivo]=useState(0)
   const contenedor=useRef<HTMLDivElement>(null),entrada=useRef<HTMLInputElement>(null)
@@ -190,7 +190,7 @@ function BuscarPedido({ rastreo, buscado, setBuscado, hora, onUnidad }: { rastre
   </div>
 }
 
-function FichaPedido({ p, hora, onCerrar, onUnidad }: { p: PedidoRastreo; hora: (h: number) => string; onCerrar: () => void; onUnidad: (id: number) => void }) {
+function FichaPedido({ p, hora, onCerrar, onUnidad }: { p: PedidoRastreo; hora: (h: number) => string; onCerrar: () => void; onUnidad: (id: number | null) => void }) {
   const u = useContext(UmbralesCtx)
   const v9 = useV9()
   const cerrado = p.estado === 'ENTREGADO' || p.estado === 'NO_ENTREGADO'
@@ -342,7 +342,7 @@ function CollapseResults({variant='collapse',onLocate,sim,segReal=0,hora=horaSim
  return <section className="space-y-3 text-xs"><h3 className="text-base font-bold">{titulo}</h3><div className="rounded-xl border bg-slate-50 p-3 leading-relaxed"><p>Inicio: {fechaHora(sim.fechaInicio)}</p><p>Corte final: {fechaHora(sim.fechaSimulada)}</p><p>Tiempo real ejecutado: {duracion(segReal)}</p><p>Estado: {estadoEnEspanol(sim.simulacion.estado)}</p>{sim.cierre&&<p className="mt-2 font-semibold">{estadoEnEspanol(sim.cierre.motivo)}: {sim.cierre.detalle}</p>}{sim.simulacion.ultimoError&&<p className="mt-2 text-red-700">{sim.simulacion.ultimoError}</p>}</div><div className="grid grid-cols-2 gap-2">{indicadores.map(([k,v])=><div className="rounded-xl border p-3" key={String(k)}><p className="text-slate-500">{k}</p><b className="mt-1 block text-base">{v}</b></div>)}</div>{col?.pedido&&<button onClick={()=>onLocate?.(col.pedido!.codigo)} className="rounded-xl border border-red-200 bg-red-50 p-3 text-left text-red-800">Pedido causante: {col.pedido.codigo} · ({col.pedido.posX},{col.pedido.posY}) · plazo {hora(col.pedido.fechaLimiteH)}</button>}<button className="w-full rounded-xl bg-blue-700 px-3 py-3 font-bold text-white" onClick={()=>ctx.setPanelActivo('reportes')}>Abrir reporte legible y última planificación estable</button></section>
 }
 
-function Operator({ inicioPendiente, setInicioPendiente, scenario, setScenario, state, setState, replanned, setReplanned, sim, setSim, mapa, escenarioId, onCambio, onUmbrales, hora, segReal, unidadSeleccionada, onUnidad, buscado, setBuscado, warehouse, setWarehouse, historialCompleto, recuperarDia, generaciones, invalidarSim, mapaActual }: { inicioPendiente:boolean;setInicioPendiente:(v:boolean)=>void;mapaActual: boolean; generaciones: ReturnType<typeof crearGeneraciones>; invalidarSim: () => void; recuperarDia: () => void; mapa: MapaDatos | null; escenarioId: number | null; onCambio: () => void; onUmbrales: (u: { pedido: Umbrales; stock: Umbrales }) => void; hora: (h: number) => string; segReal: number; scenario: Scenario; setScenario: (s: Scenario) => void; state: ExecState; setState: (s: ExecState) => void; replanned: boolean; setReplanned: (r: boolean) => void; sim: VistaSimulacion | null; setSim: (s: VistaSimulacion | null) => void; unidadSeleccionada: number | null; onUnidad: (id: number) => void; buscado: string | null; setBuscado: (codigo: string | null) => void; warehouse: string | null; setWarehouse: (nombre: string | null) => void; historialCompleto: boolean }) {
+function Operator({ inicioPendiente, setInicioPendiente, scenario, setScenario, state, setState, replanned, setReplanned, sim, setSim, mapa, escenarioId, onCambio, onUmbrales, hora, segReal, unidadSeleccionada, onUnidad, buscado, setBuscado, warehouse, setWarehouse, historialCompleto, recuperarDia, generaciones, invalidarSim, mapaActual }: { inicioPendiente:boolean;setInicioPendiente:(v:boolean)=>void;mapaActual: boolean; generaciones: ReturnType<typeof crearGeneraciones>; invalidarSim: () => void; recuperarDia: () => void; mapa: MapaDatos | null; escenarioId: number | null; onCambio: () => void; onUmbrales: (u: { pedido: Umbrales; stock: Umbrales }) => void; hora: (h: number) => string; segReal: number; scenario: Scenario; setScenario: (s: Scenario) => void; state: ExecState; setState: (s: ExecState) => void; replanned: boolean; setReplanned: (r: boolean) => void; sim: VistaSimulacion | null; setSim: (s: VistaSimulacion | null) => void; unidadSeleccionada: number | null; onUnidad: (id: number | null) => void; buscado: string | null; setBuscado: (codigo: string | null) => void; warehouse: string | null; setWarehouse: (nombre: string | null) => void; historialCompleto: boolean }) {
   const u = useContext(UmbralesCtx)
   const [performance, setPerformance] = useState(false)
   const [params, setParams] = useState(false)
@@ -393,12 +393,12 @@ function Operator({ inicioPendiente, setInicioPendiente, scenario, setScenario, 
     catch (e) { if (generaciones.vigente(version)) { invalidarSim(); setSimMsg(mensajeError(e)) } }
     finally { ocupada.current = false; setSimBusy(false) }
   }
-  const openWarehouse = (w: string) => { setWarehouse(w);v9.setPanelActivo('almacenes') }
+  const openWarehouse = (w: string | null) => { setWarehouse(w);if(w!==null)v9.setPanelActivo('almacenes') }
   const applyParams = () => {
     const nums = [orderLight.verde, orderLight.rojo, stockLight.verde, stockLight.rojo].map(Number)
     if (nums.some(n => !Number.isFinite(n) || n < 0)) return setParamsMsg('Revisa los valores: deben ser números positivos.')
     if (Number(orderLight.verde) <= Number(orderLight.rojo)) return setParamsMsg('En pedidos, el límite de verde debe ser mayor que el de rojo.')
-    if (Number(stockLight.verde) <= Number(stockLight.rojo) || Number(stockLight.verde) > 100) return setParamsMsg('En stock, verde debe ser mayor que rojo y como máximo 100 %.')
+    if (Number(stockLight.verde) <= Number(stockLight.rojo) || Number(stockLight.verde) > 100) return setParamsMsg('En existencias, verde debe ser mayor que rojo y como máximo 100 %.')
     onUmbrales({ pedido: { verde: Number(orderLight.verde), rojo: Number(orderLight.rojo) }, stock: { verde: Number(stockLight.verde), rojo: Number(stockLight.rojo) } })
     setParamsMsg('Cambios aplicados: el mapa ya usa los nuevos semáforos. No alteran el reloj de la ejecución.')
   }
@@ -438,7 +438,7 @@ function Operator({ inicioPendiente, setInicioPendiente, scenario, setScenario, 
           <div className="mt-1 grid grid-cols-2 gap-2"><label className="font-semibold text-emerald-700">Verde si margen ≥<input type="number" value={orderLight.verde} onChange={e => setOrderLight({ ...orderLight, verde: e.target.value })} className={field} /></label><label className="font-semibold text-red-700">Rojo si margen &lt;<input type="number" value={orderLight.rojo} onChange={e => setOrderLight({ ...orderLight, rojo: e.target.value })} className={field} /></label></div>
           <p className="mt-1 text-slate-500"><b className="text-amber-700">Ámbar</b> entre {orderLight.rojo || '?'} h y {orderLight.verde || '?'} h. Más margen es más seguro.</p>
           <p className="mt-4 font-bold text-slate-700">Semáforo de existencias · almacenes intermedios (% disponible)</p>
-          <div className="mt-1 grid grid-cols-2 gap-2"><label className="font-semibold text-emerald-700">Verde si stock ≥<input type="number" value={stockLight.verde} onChange={e => setStockLight({ ...stockLight, verde: e.target.value })} className={field} /></label><label className="font-semibold text-red-700">Rojo si stock &lt;<input type="number" value={stockLight.rojo} onChange={e => setStockLight({ ...stockLight, rojo: e.target.value })} className={field} /></label></div>
+          <div className="mt-1 grid grid-cols-2 gap-2"><label className="font-semibold text-emerald-700">Verde si existencias ≥<input type="number" value={stockLight.verde} onChange={e => setStockLight({ ...stockLight, verde: e.target.value })} className={field} /></label><label className="font-semibold text-red-700">Rojo si existencias &lt;<input type="number" value={stockLight.rojo} onChange={e => setStockLight({ ...stockLight, rojo: e.target.value })} className={field} /></label></div>
           <p className="mt-1 text-slate-500"><b className="text-amber-700">Ámbar</b> entre {stockLight.rojo || '?'} % y {stockLight.verde || '?'} %. El almacén central es ilimitado y no usa semáforo.</p>
           <div className="mt-4 flex flex-wrap items-center gap-3"><button onClick={applyParams} className="bg-blue-700 px-4 py-2 font-bold text-white">Aplicar cambios</button>{paramsMsg && <span className={paramsMsg.startsWith('Cambios') ? 'text-emerald-700' : 'font-semibold text-red-700'}>{paramsMsg}</span>}</div>
         </div>}
@@ -490,7 +490,7 @@ function Operator({ inicioPendiente, setInicioPendiente, scenario, setScenario, 
             const a = mapa?.almacenes.find(x => (NOMBRE_ALMACEN[x.codigo] ?? x.codigo) === warehouse)
             const stock = (pct: number, texto: string) => <>{texto} · <span className={`font-bold ${TEXTO_SEMAFORO[tonoStock(pct, u.stock)]}`}>● {{ 'vacío': 'vacío', verde: 'verde', ambar: 'ámbar', rojo: 'rojo' }[tonoStock(pct, u.stock)]}</span></>
             const filas: [string, ReactNode][] = a
-              ? [['Stock', a.central ? 'Ilimitado (no usa semáforo)' : a.pct == null ? 'No disponible' : stock(a.pct, `${a.stock?.toLocaleString('es-PE')} de ${a.capacidad?.toLocaleString('es-PE')} u · ${a.pct} %`)],
+              ? [['Existencias', a.central ? 'Ilimitado (no usa semáforo)' : a.pct == null ? 'No disponible' : stock(a.pct, `${a.stock?.toLocaleString('es-PE')} de ${a.capacidad?.toLocaleString('es-PE')} u · ${a.pct} %`)],
                  ['Unidades en base', String(a.vehiculosEnBase)], ['Unidades en ruta', String(a.unidadesFuera)], ['Pedidos por entregar', String(a.pedidosPorEntregar)], ['Ubicación', `(${a.x}, ${a.y})`]]
               : [['Datos', 'No disponibles']]
             return <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">{filas.map(([k, v]) => <Fragment key={k}><dt className="text-slate-500">{k}</dt><dd className="font-semibold">{v}</dd></Fragment>)}</dl>
@@ -503,7 +503,7 @@ function Operator({ inicioPendiente, setInicioPendiente, scenario, setScenario, 
   </div>
 }
 
-function Viewer({ state, setState, scenario, replanned, sim, mapa, hora, segReal, estadoUrl, esDia = false, unidadSeleccionada, onUnidad, buscado, setBuscado, warehouse, setWarehouse }: { estadoUrl?: string; esDia?: boolean; state: ExecState; setState: (s: ExecState) => void; scenario: Scenario; replanned: boolean; sim: VistaSimulacion | null; mapa: MapaDatos | null; hora: (h: number) => string; segReal: number; unidadSeleccionada: number | null; onUnidad: (id: number) => void; buscado: string | null; setBuscado: (codigo: string | null) => void; warehouse: string | null; setWarehouse: (nombre: string | null) => void }) {
+function Viewer({ state, setState, scenario, replanned, sim, mapa, hora, segReal, estadoUrl, esDia = false, unidadSeleccionada, onUnidad, buscado, setBuscado, warehouse, setWarehouse }: { estadoUrl?: string; esDia?: boolean; state: ExecState; setState: (s: ExecState) => void; scenario: Scenario; replanned: boolean; sim: VistaSimulacion | null; mapa: MapaDatos | null; hora: (h: number) => string; segReal: number; unidadSeleccionada: number | null; onUnidad: (id: number | null) => void; buscado: string | null; setBuscado: (codigo: string | null) => void; warehouse: string | null; setWarehouse: (nombre: string | null) => void }) {
   const [kpisAbiertos, setKpisAbiertos] = useState(false)
   const [estadoAbierto, setEstadoAbierto] = useState(false)
   useEffect(() => { if (window.innerWidth < 768) setEstadoAbierto(false) }, [])

@@ -35,7 +35,7 @@ export function MapaSimulacion({ capas, fecha }: { capas: CapasMapa; fecha: stri
 
     {capas.almacenes.map(a => {
       const pct = a.central || !a.capacidad ? null : Math.round((a.stock ?? 0) / a.capacidad * 100)
-      return <div key={a.id} title={`${a.codigo} (${a.posicion.x},${a.posicion.y}) · ${pct == null ? 'stock ilimitado' : `${a.stock} de ${a.capacidad} unidades`}`} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: izquierda(a.posicion.x), top: arriba(a.posicion.y) }}>
+      return <div key={a.id} title={`${a.codigo} (${a.posicion.x},${a.posicion.y}) · ${pct == null ? 'existencias ilimitadas' : `${a.stock} de ${a.capacidad} unidades`}`} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: izquierda(a.posicion.x), top: arriba(a.posicion.y) }}>
         <div className={`flex size-8 items-center justify-center border-2 border-white shadow-md ring-1 ring-slate-300 ${a.central ? 'bg-blue-700' : 'bg-slate-700'} text-white`}><Warehouse className="size-4" /></div>
         <span className="mt-1 block whitespace-nowrap bg-white/90 px-1.5 py-0.5 text-[10px] font-bold text-slate-700 shadow-sm">{a.codigo}{pct != null && <span className={`ml-1 ${STOCK(pct)}`}>· {pct}%</span>}</span>
       </div>

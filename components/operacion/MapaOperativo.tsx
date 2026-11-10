@@ -13,6 +13,12 @@ import { LeyendaMapa as Leyenda } from './LeyendaMapa'
 import { extremosBloqueo } from '@/lib/operacion/extremosBloqueo'
 import { ampliarCamara, centrarCamara, limitarCamara } from '@/lib/operacion/camara'
 
+// Orienta el ícono según el tramo sin dejarlo de cabeza: hacia la izquierda se voltea en espejo
+// en lugar de girar 180°, así el vehículo siempre queda con las ruedas abajo.
+function giroIcono(direccion?: number | null) {
+  const a = (((direccion ?? 0) % 360) + 360) % 360
+  return a > 90 && a < 270 ? `rotate(${a - 180}deg) scaleX(-1)` : `rotate(${a}deg)`
+}
 type ExecState = 'idle' | 'running' | 'incident' | 'complete' | 'collapse' | 'disconnected'
 const COLOR_TIPO: Record<TipoVehiculo, string> = { AUTO: '#2563eb', MOTO: '#7c3aed', BICICLETA: '#0f9f8d' }
 const CLASE_TIPO: Record<TipoVehiculo, string> = { AUTO: 'bg-blue-600', MOTO: 'bg-violet-600', BICICLETA: 'bg-teal-600' }
@@ -23,7 +29,7 @@ const tonoStock = (pct: number, u: Umbrales) => pct === 0 ? 'vacío' : pct >= u.
 const TEXTO_SEMAFORO = { 'vacío': 'text-slate-700', verde: 'text-emerald-700', ambar: 'text-amber-700', rojo: 'text-red-700' } as const
 const ETIQUETA_ESTADO: Record<EstadoPedido, string> = { PENDIENTE: 'Pendiente de asignar', ASIGNADO: 'Asignado a una ruta', EN_RUTA: 'En ruta', ENTREGADO: 'Entregado', NO_ENTREGADO: 'No entregado' }
 
-export function MapaOperativo({ state, highlightOrderId, full = false, replanned = false, onWarehouse, onPedido, datos: datosServidor, buscado, almacenMarcado, unidadSeleccionada, onUnidad }: { state: ExecState; highlightOrderId?: string | null; almacenMarcado?: string | null; full?: boolean; replanned?: boolean; onWarehouse?: (name: string) => void; onPedido?: (codigo: string) => void; datos?: MapaDatos | null; buscado?: string | null; unidadSeleccionada?: number | null; onUnidad?: (id: number) => void }) {
+export function MapaOperativo({ state, highlightOrderId, full = false, replanned = false, onWarehouse, onPedido, datos: datosServidor, buscado, almacenMarcado, unidadSeleccionada, onUnidad }: { state: ExecState; highlightOrderId?: string | null; almacenMarcado?: string | null; full?: boolean; replanned?: boolean; onWarehouse?: (name: string | null) => void; onPedido?: (codigo: string | null) => void; datos?: MapaDatos | null; buscado?: string | null; unidadSeleccionada?: number | null; onUnidad?: (id: number | null) => void }) {
   const u = useContext(UmbralesCtx)
   const ctx = useV9()
   const cuadro=useCuadroMovimiento(ctx.mapa,state==='running'||state==='incident')
@@ -44,7 +50,7 @@ export function MapaOperativo({ state, highlightOrderId, full = false, replanned
       return posicion?{...v,...posicion,...(posicion.enMovimiento?{estado:'EN_RUTA' as const}:{})}:v
     }),rutas:rutas.length?rutas:baseVisual.rutas.filter(r=>r.tramoFisico)}
   },[baseVisual,cuadro,rutasPreparadas])
-  const seleccionarPedido=useCallback((codigo:string)=>{ctx.setRutasConsulta([]);ctx.setRutaProducto(null);onPedido?.(codigo)},[ctx.setRutasConsulta,ctx.setRutaProducto,onPedido])
+  const seleccionarPedido=useCallback((codigo:string)=>{ctx.setRutasConsulta([]);ctx.setRutaProducto(null);onPedido?.(codigo===buscado?null:codigo)},[ctx.setRutasConsulta,ctx.setRutaProducto,onPedido,buscado])
   const [grupo, setGrupo] = useState<string | null>(null)
   useEffect(()=>{setGrupo(null)},[ctx.mapa?.escenarioId,unidadSeleccionada,ctx.filtros])
   useEffect(()=>{if(!grupo)return;const cerrar=(e:KeyboardEvent)=>{if(e.key==='Escape')setGrupo(null)};document.addEventListener('keydown',cerrar);return()=>document.removeEventListener('keydown',cerrar)},[grupo])
@@ -74,6 +80,18 @@ export function MapaOperativo({ state, highlightOrderId, full = false, replanned
     setCamara(c => centrarCamara(c, a, Math.max(1,rect.width-48), Math.max(1,rect.height-48)))
   }, [almacenMarcado])
   useEffect(() => { if (unidadSeleccionada == null && almacenMarcado == null) ultimoObjetivo.current = null }, [unidadSeleccionada, almacenMarcado])
+  // Seguimiento: mientras la unidad esté seleccionada (resaltada en celeste), la cámara la acompaña
+  // a medida que avanza. Arrastrar el mapa a mano suelta el seguimiento hasta volver a seleccionarla;
+  // deseleccionarla deja el mapa quieto donde está.
+  const seguir = useRef(true)
+  useEffect(() => { seguir.current = true }, [unidadSeleccionada])
+  const seguida = unidadSeleccionada == null ? undefined : datos?.vehiculos.find(v => v.id === unidadSeleccionada)
+  useEffect(() => {
+    const rect = area.current?.getBoundingClientRect()
+    if (!seguida || !seguir.current || !rect || arrastre.current) return
+    ultimoObjetivo.current = { x: seguida.x, y: seguida.y }
+    setCamara(c => centrarCamara(c, seguida, Math.max(1,rect.width-48), Math.max(1,rect.height-48)))
+  }, [seguida?.x, seguida?.y])
   useEffect(() => {
     const nodo = area.current
     if (!nodo) return
@@ -146,7 +164,7 @@ export function MapaOperativo({ state, highlightOrderId, full = false, replanned
   const fondoLuz=(luz:string)=>luz==='vacío'?'bg-slate-500':luz==='verde'?'bg-emerald-600':luz==='ámbar'?'bg-amber-600':luz==='rojo'?'bg-red-700':'bg-slate-400'
   return <div ref={area} className={`mapa-operativo ${full ? 'absolute inset-0' : 'relative min-h-[480px]'} overflow-hidden bg-[#eef2f1]`} onWheel={e => { e.preventDefault(); const rect = e.currentTarget.getBoundingClientRect(); zoom(Math.exp(-Math.max(-100,Math.min(100,e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?300:1)))*.002), { x: e.clientX - rect.left, y: e.clientY - rect.top }) }}
     onPointerDown={e => { if (e.button !== 0 || (e.target as HTMLElement).closest('button, [data-map-marker]')) return; arrastre.current = { x: e.clientX, y: e.clientY, origenX: camara.x, origenY: camara.y }; e.currentTarget.setPointerCapture(e.pointerId) }}
-    onPointerMove={e => { const a = arrastre.current; if (!a) return; const rect = e.currentTarget.getBoundingClientRect(); setCamara(c => limitarCamara(a.origenX + e.clientX - a.x, a.origenY + e.clientY - a.y, c.escala, Math.max(1,rect.width-48), Math.max(1,rect.height-48))) }}
+    onPointerMove={e => { const a = arrastre.current; if (!a) return; if (Math.abs(e.clientX - a.x) + Math.abs(e.clientY - a.y) > 4) seguir.current = false; const rect = e.currentTarget.getBoundingClientRect(); setCamara(c => limitarCamara(a.origenX + e.clientX - a.x, a.origenY + e.clientY - a.y, c.escala, Math.max(1,rect.width-48), Math.max(1,rect.height-48))) }}
     onPointerUp={() => { arrastre.current = null }} onPointerCancel={() => { arrastre.current = null }}>
     <div className="plano-operativo absolute origin-top-left" style={{ inset:24, transform: `translate(${camara.x}px, ${camara.y}px) scale(${camara.escala})`, transition: arrastre.current ? 'none' : 'transform 90ms linear' }}>
     <svg className="absolute inset-0 size-full" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
@@ -164,10 +182,10 @@ export function MapaOperativo({ state, highlightOrderId, full = false, replanned
     {!full && <div className="absolute left-4 top-4 bg-white/90 px-3 py-2 text-xs font-bold text-slate-700 shadow"><MapPin className="mr-2 inline size-4 text-blue-600" />Origen (0,0) abajo-izquierda · Cuadrícula 1 km · 70 × 50 km</div>}
 
     {/* Almacenes: barra y % de existencias disponibles (el central es ilimitado) y unidades estacionadas en su base */}
-    {almacenes.filter(a => ctx.filtros.luzAlmacen==='todos' || (a.central?'no disponible':a.pct==null?'no disponible':tonoStock(a.pct,u.stock).replace('ambar','ámbar'))===ctx.filtros.luzAlmacen).map(a => <button type="button" data-map-marker key={a.nombre} title={`${a.nombre} (${a.x},${a.y}) · ${a.central ? 'existencias ilimitadas' : a.pct == null ? 'existencias no disponibles' : `existencias ${a.pct}%`}${onWarehouse ? ' · clic para ver detalle' : ''}`} onClick={() => {ctx.setEnfoque({x:a.x,y:a.y,clave:Date.now()});ctx.setPanelActivo('almacenes');onWarehouse?.(a.nombre)}} className={`marcador-almacen absolute flex flex-col items-center ${onWarehouse ? 'cursor-pointer' : ''}`} style={pos(a.x, a.y)}>
+    {almacenes.filter(a => ctx.filtros.luzAlmacen==='todos' || (a.central?'no disponible':a.pct==null?'no disponible':tonoStock(a.pct,u.stock).replace('ambar','ámbar'))===ctx.filtros.luzAlmacen).map(a => <button type="button" data-map-marker key={a.nombre} title={`${a.nombre} (${a.x},${a.y}) · ${a.central ? 'existencias ilimitadas' : a.pct == null ? 'existencias no disponibles' : `existencias ${a.pct}%`}${onWarehouse ? ' · clic para ver detalle' : ''}`} onClick={() => {if(a.nombre===almacenMarcado){if(ctx.panelActivo==='almacenes')ctx.setPanelActivo(null);onWarehouse?.(null);return}ctx.setEnfoque({x:a.x,y:a.y,clave:Date.now()});ctx.setPanelActivo('almacenes');onWarehouse?.(a.nombre)}} className={`marcador-almacen absolute flex flex-col items-center ${onWarehouse ? 'cursor-pointer' : ''}`} style={pos(a.x, a.y)}>
       <div className={`flex size-8 items-center justify-center border-2 border-white shadow-md ${a.nombre === almacenMarcado ? 'ring-4 ring-blue-500' : 'ring-1 ring-slate-300'} ${a.central ? 'bg-blue-700' : a.pct == null ? 'bg-slate-400' : CLASE_SEMAFORO[tonoStock(a.pct,u.stock)]} text-white`}><Warehouse className="size-4" /></div>
       {a.pct != null && <div className="mt-1 h-1.5 w-12 bg-white ring-1 ring-slate-300"><div className={`h-full ${CLASE_SEMAFORO[tonoStock(a.pct, u.stock)]}`} style={{ width: `${a.pct}%` }} /></div>}
-      <span className="mt-1 block whitespace-nowrap bg-white/90 px-1.5 py-0.5 text-[10px] font-bold text-slate-700 shadow-sm">{a.nombre} · {a.central ? <span className="text-blue-700">∞</span> : a.pct == null ? 'existencias no disponibles' : <span className={TEXTO_SEMAFORO[tonoStock(a.pct, u.stock)]}>stock {a.pct}%</span>}</span>
+      <span className="mt-1 block whitespace-nowrap bg-white/90 px-1.5 py-0.5 text-[10px] font-bold text-slate-700 shadow-sm">{a.nombre} · {a.central ? <span className="text-blue-700">∞</span> : a.pct == null ? 'existencias no disponibles' : <span className={TEXTO_SEMAFORO[tonoStock(a.pct, u.stock)]}>existencias {a.pct}%</span>}</span>
       {a.enBase > 0 && <span className="block whitespace-nowrap bg-white/90 px-1.5 text-[10px] font-semibold text-slate-500 shadow-sm">{a.enBase} UT en base</span>}
     </button>)}
 
@@ -177,12 +195,12 @@ export function MapaOperativo({ state, highlightOrderId, full = false, replanned
       const sobreAlmacen=datos.almacenes.some(a=>a.x===v.x&&a.y===v.y)
       return <div key={identificadorGrupo} data-borde={v.x>65?'derecha':undefined} data-borde-superior={v.y>47?'true':undefined} data-seleccionado={unidades.some(q=>q.id===unidadSeleccionada)?'true':undefined} className={`marcador-unidad group pointer-events-none absolute z-[3] [&_button]:pointer-events-auto ${unidades.length>1?'grupo-cercano':''}`}  style={{...pos(v.x,v.y),...(sobreAlmacen?{marginLeft:44/camara.escala}: {})}}>
         {sobreAlmacen&&<span aria-hidden="true" className="absolute right-full top-4 w-11 border-t border-dashed border-slate-400"/>}<div className="relative mx-auto w-fit">
-        <button type="button" onClick={() => {const cercanas=unidadesEnPunto(dibujables,v.id,dimensiones.ancho,dimensiones.alto,camara.escala);if(cercanas.length>1){setGrupo(cercanas.map(q=>q.id).join('-'));return}ctx.setRutasConsulta([]);ctx.setRutaProducto(null);ctx.setPanelActivo('flota');onUnidad?.(v.id)}} title={unidades.map(q => `${q.codigo} · carga ${q.carga}/${q.capacidad} · ${estadoEnEspanol(q.estado)} · ${q.ocupacionPct == null ? 'ocupación no disponible' : `${q.ocupacionPct.toLocaleString('es-PE',{maximumFractionDigits:1})}% · ${luzOcupacion(q.ocupacionPct, q.capacidad, ctx.limites)}`}`).join('\n')} aria-label={unidades.length > 1 ? `${unidades.length} unidades cercanas. Abrir detalle de vehículos` : `${v.codigo} · carga ${v.carga}/${v.capacidad} · ${estadoEnEspanol(v.estado)} · ${categoria}`} className={`mx-auto flex min-h-9 min-w-9 items-center justify-center rounded-full border-2 border-white px-1 font-bold text-white shadow ${unidades.some(q => q.id === unidadSeleccionada) ? 'ring-4 ring-blue-400' : ''} ${unidades.length > 1 ? 'bg-slate-700' : averiadas.has(v.id) ? colorAveria(v.id) : fondoLuz(categoria)}`}>
-          {unidades.length > 1 ? unidades.length : <Icono className="size-4" style={{transform:`rotate(${v.direccion??0}deg)`}} />}
+        <button type="button" onClick={() => {if(unidadSeleccionada===v.id){ctx.setPanelActivo(null);onUnidad?.(null);return}const cercanas=unidadesEnPunto(dibujables,v.id,dimensiones.ancho,dimensiones.alto,camara.escala);if(cercanas.length>1){setGrupo(cercanas.map(q=>q.id).join('-'));return}ctx.setRutasConsulta([]);ctx.setRutaProducto(null);ctx.setPanelActivo('flota');onUnidad?.(v.id)}} title={unidades.map(q => `${q.codigo} · carga ${q.carga}/${q.capacidad} · ${estadoEnEspanol(q.estado)} · ${q.ocupacionPct == null ? 'ocupación no disponible' : `${q.ocupacionPct.toLocaleString('es-PE',{maximumFractionDigits:1})}% · ${luzOcupacion(q.ocupacionPct, q.capacidad, ctx.limites)}`}`).join('\n')} aria-label={unidades.length > 1 ? `${unidades.length} unidades cercanas. Abrir detalle de vehículos` : `${v.codigo} · carga ${v.carga}/${v.capacidad} · ${estadoEnEspanol(v.estado)} · ${categoria}`} className={`mx-auto flex min-h-9 min-w-9 items-center justify-center rounded-full border-2 border-white px-1 font-bold text-white shadow ${unidades.some(q => q.id === unidadSeleccionada) ? 'ring-4 ring-blue-400' : ''} ${unidades.length > 1 ? 'bg-slate-700' : averiadas.has(v.id) ? colorAveria(v.id) : fondoLuz(categoria)}`}>
+          {unidades.length > 1 ? unidades.length : <Icono className="size-4" style={{transform:giroIcono(v.direccion)}} />}
         </button>
         {unidades.length === 1 && v.direccion != null && <span aria-label="Dirección del tramo" className="absolute left-full top-1/2 ml-0.5 leading-none text-blue-900" style={{ transform: `translateY(-50%) rotate(${v.direccion}deg)` }}>➜</span>}
         </div>
-        {averiasGrupo.length>0&&<div className="mt-1 flex flex-wrap justify-center gap-1" aria-label="Averías visibles">{averiasGrupo.map(q=><button key={q.id} onClick={()=>{ctx.setPanelActivo('flota');onUnidad?.(q.id)}} title={`${q.codigo} · avería tipo ${tipoAveria(q.id)??'desconocido'}`} aria-label={`Enfocar avería tipo ${tipoAveria(q.id)??'desconocido'} de ${q.codigo}`} className={`flex min-h-6 items-center gap-1 rounded border-2 border-white px-1 text-[10px] font-bold text-white shadow ring-1 ring-slate-900 ${colorAveria(q.id)}`}><Wrench className="size-3"/>A{tipoAveria(q.id)??'?'}{unidades.length>1?` ${q.codigo}`:''}</button>)}</div>}
+        {averiasGrupo.length>0&&<div className="mt-1 flex flex-wrap justify-center gap-1" aria-label="Averías visibles">{averiasGrupo.map(q=><button key={q.id} onClick={()=>{if(unidadSeleccionada===q.id){ctx.setPanelActivo(null);onUnidad?.(null);return}ctx.setPanelActivo('flota');onUnidad?.(q.id)}} title={`${q.codigo} · avería tipo ${tipoAveria(q.id)??'desconocido'}`} aria-label={`Enfocar avería tipo ${tipoAveria(q.id)??'desconocido'} de ${q.codigo}`} className={`flex min-h-6 items-center gap-1 rounded border-2 border-white px-1 text-[10px] font-bold text-white shadow ring-1 ring-slate-900 ${colorAveria(q.id)}`}><Wrench className="size-3"/>A{tipoAveria(q.id)??'?'}{unidades.length>1?` ${q.codigo}`:''}</button>)}</div>}
         <span className={`etiqueta-unidad block whitespace-nowrap bg-white/95 px-2 py-1 text-[11px] font-bold shadow-sm ${unidades.length > 1 ? 'text-slate-700' : categoria === 'verde' ? 'text-emerald-700' : categoria === 'ámbar' ? 'text-amber-700' : categoria === 'rojo' ? 'text-red-700' : 'text-slate-600'}`}>{unidades.length > 1 ? 'Unidades' : `${v.codigo} · ${v.ocupacionPct == null ? '—' : `${v.ocupacionPct.toLocaleString('es-PE',{maximumFractionDigits:1})}%`}`}</span>
         {unidades.length===1&&<span className={`detalle-unidad ${unidadSeleccionada===v.id?'seleccionada':''}`}>{estadoEnEspanol(v.estado)} · {v.carga}/{v.capacidad} productos</span>}
       </div>
