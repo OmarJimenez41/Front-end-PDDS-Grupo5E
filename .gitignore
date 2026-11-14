@@ -27,3 +27,9 @@ yarn-error.log*
 next-env.d.ts
 /.next-verificacion/
 /.next-publicacion/
+
+# Local UI review output
+.next-ux-dev/
+
+# Vista aislada de calibración
+.next-calibracion/

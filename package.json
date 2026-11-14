@@ -10,7 +10,8 @@
     "test:correcciones": "node tests/correcciones-v9.cjs",
     "test:revision": "node tests/lectura-operacion.cjs && node tests/mejoras-v9.cjs && node tests/correcciones-v9.cjs && node tests/revision-nov05.cjs && node tests/reporte-colapso.cjs && node tests/seleccion-escenario.cjs",
     "test:movimiento": "node tests/movimiento-continuo.cjs && node tests/reproduccion-movimiento.cjs",
-    "test:mapa": "node tests/agrupacion-mapa.cjs"
+    "test:mapa": "node tests/agrupacion-mapa.cjs",
+    "test:metricas": "node tests/metricas-tiempo.cjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",

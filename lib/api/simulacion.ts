@@ -37,7 +37,7 @@ export interface Colapso {
 }
 
 export interface VistaSimulacion {
-  tiempos?:{saConfiguradaH:number;scConfiguradoH:number;taMs:EstadisticaTiempo;saH:EstadisticaTiempo;scH:EstadisticaTiempo;planificacionMs:EstadisticaTiempo}|null
+  tiempos?:{programada?:CadenciaProgramada|null;saConfiguradaH:number;scConfiguradoH:number;taMs:EstadisticaTiempo;saH:EstadisticaTiempo;scH:EstadisticaTiempo;planificacionMs:EstadisticaTiempo}|null
   cierre?:{motivo:string;detalle:string}|null
   simulacion: {
     escenarioId: number
@@ -268,3 +268,14 @@ export async function planVigente(escenarioId: number): Promise<PlanVigente | nu
 export function pedidosAbiertos(escenarioId: number) {
   return pedir<PedidoEscenario[]>(`/api/escenarios/${escenarioId}/pedidos/pendientes`)
 }
+
+/** Observabilidad del motor sin descargar mapa, pedidos ni resultados completos. */
+export interface LecturaTiempos {
+  escenarioId:number; estado:EstadoSimulacion; relojH:number; consultadoEn:string
+  origen:'MOTOR'|'REGISTRO_PERSISTIDO'; configuracionOrigen:'SERVIDOR_ACTUAL'
+  tiempos:NonNullable<VistaSimulacion['tiempos']>|null
+}
+export const consultarTiempos=(id:number,signal?:AbortSignal)=>pedir<LecturaTiempos>(`/api/simulaciones/${id}/tiempos`,{signal})
+
+export interface SerieProgramada {muestras:number;suma:number;minimo:number;maximo:number;ultimo:number}
+export interface CadenciaProgramada {version:number;k:number;saConfiguradoMs:number;scConfiguradoH:number;taMs:SerieProgramada;saMs:SerieProgramada;scH:SerieProgramada;extraordinarias:number;atrasos:number}

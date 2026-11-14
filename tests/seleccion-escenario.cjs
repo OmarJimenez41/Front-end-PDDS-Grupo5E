@@ -14,3 +14,9 @@ assert.equal(estacionadaEnAlmacen({...v,estado:'AVERIADA'},bases),false,'An inci
 assert.equal(estacionadaEnAlmacen({...v,x:28},bases),false)
 assert.deepEqual(v,{id:1,x:27,y:14,estado:'EN_BASE'},'Never move physical coordinates')
 console.log('Independent draft selection and parked warehouse markers: OK')
+
+const {escenarioPorTipo}=require('../lib/operacion/seleccionEscenario.ts')
+assert.equal(escenarioPorTipo('CINCO_DIAS','day'),'five','Shared scenario determines active navigation')
+assert.equal(escenarioPorTipo('COLAPSO','day'),'collapse')
+assert.equal(escenarioPorTipo('DIA_A_DIA','five'),'day')
+assert.equal(escenarioPorTipo(undefined,'five'),'five','An empty draft preserves explicit user selection')

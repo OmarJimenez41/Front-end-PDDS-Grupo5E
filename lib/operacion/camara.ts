@@ -13,3 +13,9 @@ export function centrarCamara(c: Camara, punto: { x: number; y: number }, ancho:
   const escala = Math.max(2, c.escala)
   return limitarCamara(ancho / 2 - punto.x / 70 * ancho * escala, alto / 2 - (1 - punto.y / 50) * alto * escala, escala, ancho, alto)
 }
+
+/** Fill the viewport with uniform geographic scale; keep the same geographic center. */
+export function llenarCamara(ancho:number,alto:number,visorAncho:number,visorAlto:number):Camara{
+ const escala=Math.min(8,Math.max(1,visorAncho/Math.max(1,ancho),visorAlto/Math.max(1,alto)))
+ return {escala,x:ancho*(1-escala)/2,y:alto*(1-escala)/2}
+}

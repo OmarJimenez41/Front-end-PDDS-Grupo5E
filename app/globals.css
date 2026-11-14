@@ -636,3 +636,207 @@
 @media(max-width:760px){.panel-resultado-pedido{position:fixed;top:auto;bottom:12px;left:12px;right:12px;width:auto;max-height:55dvh;z-index:55}}
 
 .reproduccion-suavizada{padding-left:7px;border-left:1px solid #e2e8f0;font-size:10px;font-weight:400;color:#64748b;white-space:nowrap}
+
+/* Compact workspace: map first, details on demand. */
+.superficie-operacion{--ancho-panel:340px}
+.superficie-operacion[data-panel=envios],.superficie-operacion[data-panel=datos],.superficie-operacion[data-panel=reportes]{--ancho-panel:420px}
+.panel-trabajo-v9{font-size:12px!important}
+.panel-trabajo-v9>div{padding:12px}
+.panel-trabajo-v9 h2{font-size:14px}
+.panel-trabajo-v9 label{font-size:11px!important}
+.panel-trabajo-v9 input:not([type=file]),.panel-trabajo-v9 select{min-height:30px;height:30px;padding:4px 8px;border-radius:6px;font-size:12px!important}
+.herramientas-v9 #filtros-v9 select,.herramientas-v9 #filtros-v9 input{min-height:30px;padding:4px 8px;margin-top:3px}
+.panel-trabajo-v9 p{line-height:1.4}
+.marcador-unidad,.marcador-unidad>div:first-child{width:24px;height:24px}
+.marcador-unidad button{width:24px;height:24px;min-width:24px;min-height:24px;border-width:1px;padding:0;box-shadow:0 1px 3px #142c3a25}
+.marcador-unidad .etiqueta-unidad{top:26px;font-size:10px!important;padding:2px 4px}
+.marcador-unidad .detalle-unidad{top:48px}
+.marcador-unidad:not(:hover):not(:focus-within):not([data-seleccionado=true]) .etiqueta-unidad{display:none}
+.marcador-almacen>div:first-child{width:26px;height:26px;border-width:1px;border-radius:6px}
+.marcador-almacen>span{font-size:10px!important}
+.controles-contextuales-mapa{min-height:42px;padding:4px 12px;gap:8px}
+.control-contextual,.consulta-contextual .buscador-pedido>form{height:32px}
+.superficie-operacion .escena-operacion{--alto-acciones:42px}
+.panel-control-operacion{top:42px!important}
+#resumen-estado-operacion{top:54px!important}
+.paqrap-app>header>div>div>p:nth-child(2){display:none}
+@media(max-width:760px){.controles-contextuales-mapa{min-height:80px}.superficie-operacion .escena-operacion{--alto-acciones:80px}.panel-control-operacion{top:80px!important}#resumen-estado-operacion{top:92px!important}}
+@media(pointer:coarse){.panel-trabajo-v9 input:not([type=file]),.panel-trabajo-v9 select{min-height:40px;height:40px}}
+
+.tiempos-compactos{position:relative;margin-top:4px;color:#64748b;font-size:11px}
+.tiempos-compactos>summary{cursor:pointer;padding:3px 0;width:fit-content}
+.tiempos-compactos[open]>.contexto-temporal{position:absolute;right:0;top:100%;z-index:55;width:min(660px,calc(100vw - 32px));padding:12px;background:white;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 8px 24px #173b501c}
+.superficie-operacion:fullscreen{width:100vw;height:100dvh;background:#eef2f1}
+
+/* PaqRap workspace: scenarios stay visible; work panels share the geographic surface. */
+.paqrap-app{--acento:#0e7490;--ancho-escenarios:68px;background:#f4f7fa}
+.paqrap-app>header{min-height:48px}
+.vistas-trabajo{background:#f8fafc;min-height:34px}
+.vistas-trabajo>button{padding-top:7px;padding-bottom:7px;font-size:11px}
+.herramientas-v9:has(#contenido-barra-v9:not([hidden])){padding-top:6px!important;padding-bottom:6px!important}
+.herramientas-v9 .toolbar-operativa{margin:0;padding-top:0;border-top:0;gap:6px}
+.utilidades-simples .tiempos-compactos{margin:0}
+.utilidades-simples .tiempos-compactos>summary{display:flex;align-items:center;min-height:32px;padding:0 9px;border:1px solid #e2e8f0;border-radius:7px;color:#475569;font-size:11px;white-space:nowrap}
+.navegacion-escenarios{position:absolute;left:0;top:0;bottom:0;width:var(--ancho-escenarios);z-index:24;display:flex;align-items:center;flex-direction:column;gap:6px;padding:12px 5px;border-right:1px solid #dce5ed;background:#fff}
+.rotulo-escenarios{font-size:9px;text-transform:uppercase;letter-spacing:.08em;font-weight:600;color:#94a3b8;margin-bottom:5px}
+.navegacion-escenarios>button{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;width:58px;min-height:58px;padding:8px 3px;border-radius:9px;color:#64748b;font-size:10px;font-weight:500}
+.navegacion-escenarios>button>svg{width:20px;height:20px}
+.navegacion-escenarios>button:hover{background:#f1f7fa;color:#0e7490}
+.navegacion-escenarios>button[aria-current=page]{background:#e9f4f8;color:#0e7490;font-weight:700}
+.navegacion-escenarios>button[aria-current=page]:before{content:'';position:absolute;left:-5px;top:12px;bottom:12px;width:3px;background:#0891b2;border-radius:0 3px 3px 0}
+.navegacion-escenarios>button:disabled{opacity:.4}
+.ayuda-escenarios{margin-top:auto}
+.ayuda-escenarios>summary{display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:8px;color:#64748b;cursor:pointer;list-style:none}
+.ayuda-escenarios>div{position:absolute;left:calc(100% + 8px);bottom:8px;width:260px;border:1px solid #dce5ed;border-radius:12px;padding:15px;background:#fff;box-shadow:0 8px 30px #142c3a18;font-size:12px;color:#475569}
+.ayuda-escenarios p{margin-top:8px;line-height:1.6}
+.con-navegacion>.lienzo-operacion{left:var(--ancho-escenarios)!important}
+.con-navegacion[data-control=abierto]>.lienzo-operacion{left:calc(var(--ancho-escenarios) + 340px)!important}
+.con-navegacion>.controles-contextuales-mapa{left:var(--ancho-escenarios)}
+.con-navegacion>.panel-control-operacion{left:var(--ancho-escenarios);width:340px;max-width:calc(100% - var(--ancho-escenarios));box-shadow:3px 0 12px #142c3a08}
+.con-navegacion>.panel-control-operacion>div:first-child{background:#f8fafc}
+.superficie-operacion .panel-trabajo-v9{border-radius:12px!important}
+.cabecera-mediciones{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.cabecera-mediciones p{font-size:11px;color:#64748b;margin-top:4px}
+.cabecera-mediciones button{width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:1px solid #e2e8f0;border-radius:7px}
+.procedencia-medicion{display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-top:14px;padding:7px 9px;background:#f0f7fa;border-radius:7px;color:#475569;font-size:10px}
+.nota-mediciones{font-size:11px;color:#64748b;margin:12px 0}
+.rejilla-mediciones{display:grid;gap:10px}
+.medicion-motor{padding:13px;border:1px solid #e2e8f0;border-radius:10px;background:#fff}
+.titulo-medicion{display:flex;align-items:center;gap:8px}
+.titulo-medicion>span{display:flex;align-items:center;justify-content:center;min-width:30px;height:24px;padding:0 5px;border-radius:6px;background:#e9f4f8;color:#0e7490;font-size:11px;font-weight:700}
+.titulo-medicion h4{font-size:12px;font-weight:600;color:#334155}
+.medicion-motor>strong{display:block;margin-top:10px;font-size:24px;line-height:1.2;font-weight:600;font-variant-numeric:tabular-nums;color:#0f172a}
+.medicion-motor strong small{font-size:10px;font-weight:400;color:#64748b;margin-left:7px}
+.medicion-motor>p{margin-top:8px;font-size:11px;color:#64748b}
+.medicion-motor dl{display:grid;grid-template-columns:1fr 1.4fr .7fr;gap:6px;margin-top:10px;padding-top:9px;border-top:1px solid #edf2f7;font-size:10px}
+.medicion-motor dt{color:#94a3b8}.medicion-motor dd{color:#334155;font-variant-numeric:tabular-nums;margin-top:3px;overflow-wrap:anywhere}
+.sin-muestras{display:block;margin-top:8px;font-size:10px;color:#94a3b8}
+.parametros-motor{margin-top:12px;font-size:11px;color:#64748b}.parametros-motor summary{cursor:pointer;font-weight:600;color:#475569}.parametros-motor p{margin-top:8px}
+.descarga-mediciones{display:flex;align-items:center;gap:7px;margin-top:14px;padding:10px;border:1px solid #cddfe8;border-radius:8px;font-size:11px;color:#0e7490;font-weight:600}
+.aviso-medicion{margin-top:10px;padding:9px;background:#fffbeb;border-radius:7px;font-size:11px;color:#92400e}
+@media(max-width:760px){.paqrap-app{--ancho-escenarios:54px}.navegacion-escenarios{padding:8px 3px}.navegacion-escenarios>button{width:46px;min-height:54px;font-size:9px}.rotulo-escenarios{font-size:8px}.con-navegacion[data-control=abierto]>.lienzo-operacion{left:var(--ancho-escenarios)!important}.con-navegacion>.panel-control-operacion{width:min(340px,calc(100% - var(--ancho-escenarios)));z-index:26}.con-navegacion>.controles-contextuales-mapa{padding-inline:7px}.acciones-contextuales .control-contextual{font-size:10px;gap:4px;padding-inline:6px}.utilidades-simples .tiempos-compactos>summary{font-size:10px;padding-inline:6px}.ayuda-escenarios>div{width:220px}.tiempos-compactos[open]>.contexto-temporal{position:fixed;left:10px;right:10px;top:140px;width:auto}.superficie-operacion:has(.con-navegacion) .panel-trabajo-v9{left:var(--ancho-escenarios)!important;width:calc(100% - var(--ancho-escenarios) - 8px)!important}}
+
+/* Grouped floating tools. Panels overlay the full map instead of changing its bounds. */
+#herramientas-laterales{position:absolute;inset:0;pointer-events:none;z-index:35}
+#herramientas-laterales>.herramientas-v9{pointer-events:auto;position:absolute!important;left:calc(var(--ancho-escenarios) + 8px);top:10px;bottom:10px;width:72px;padding:7px 4px!important;border:1px solid #dce5ed;border-radius:12px;background:#fffffff5;box-shadow:0 3px 14px #142c3a0b;z-index:35}
+#herramientas-laterales .toolbar-operativa{display:flex;flex-direction:column;align-items:stretch;gap:8px;margin:0;padding:0;border:0}
+#herramientas-laterales .navegacion-paneles{display:flex;flex-direction:column;align-items:stretch;gap:7px}
+#herramientas-laterales .botones-grupo{display:flex;flex-direction:column;align-items:stretch;gap:2px}
+#herramientas-laterales .botones-grupo>small{padding:4px 0;text-align:center;font-size:8px;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em}
+#herramientas-laterales .botones-grupo>button{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;width:100%;height:43px;min-height:43px;padding:4px 1px!important;border:0;border-radius:7px;font-size:9px;font-weight:500;line-height:1.2;box-shadow:none}
+#herramientas-laterales .botones-grupo>button[aria-pressed=true]{background:#e9f4f8;color:#0e7490;font-weight:700}
+#herramientas-laterales .botones-grupo>button[aria-pressed=true]:after{display:none}
+#herramientas-laterales .contador-incidencias{position:absolute;right:6px;top:2px;padding:1px 3px;font-size:8px;min-width:13px;min-height:13px;border-radius:4px}
+#herramientas-laterales .separador-navegacion{display:block;width:36px;height:1px;min-height:1px;margin:2px auto;background:#e5edf2;border:0}
+#herramientas-laterales .utilidades-operativas{display:flex;flex-direction:column;align-items:stretch;gap:3px;border-top:1px solid #e5edf2;padding-top:6px}
+#herramientas-laterales .utilidades-operativas>.separador-navegacion{display:none}
+#herramientas-laterales .utilidades-operativas>.utilidad-boton,#herramientas-laterales .utilidades-operativas>details>summary{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;width:100%;min-height:42px;height:42px;padding:4px 0!important;border:0;border-radius:7px;font-size:9px;font-weight:500;color:#64748b;background:transparent;box-shadow:none;list-style:none}
+#herramientas-laterales .utilidades-operativas>details>summary>svg:last-child:not(:first-child){display:none}
+#herramientas-laterales .utilidades-operativas>details>summary:hover,#herramientas-laterales .utilidad-boton:hover{background:#f0f7fa;color:#0e7490}
+#herramientas-laterales .tiempos-compactos{position:relative}
+#herramientas-laterales .tiempos-compactos[open]>.contexto-temporal{left:calc(100% + 12px);right:auto;top:auto;bottom:0;width:420px;max-width:calc(100vw - 175px)}
+#herramientas-laterales .configuracion-opciones{left:calc(100% + 12px);right:auto;top:auto;bottom:0;max-width:calc(100vw - 175px);width:270px}
+#herramientas-laterales .configuracion-opciones button{width:100%;text-align:left}
+#herramientas-laterales .utilidad-descarga+div{left:calc(100% + 12px);right:auto;top:auto;bottom:0;margin:0}
+#herramientas-laterales [role=status].mb-2{position:absolute;left:calc(100% + 12px);bottom:0;width:260px}
+.superficie-operacion .escena-operacion{--alto-acciones:0px}
+.con-navegacion>.lienzo-operacion,.con-navegacion[data-control=abierto]>.lienzo-operacion{inset:0!important}
+.superficie-operacion[data-panel]:not([data-panel=ninguno]) .mapa-operativo,.superficie-operacion .mapa-operativo{right:0!important;bottom:0!important;left:0!important}
+.con-navegacion>.controles-contextuales-mapa,.controles-contextuales-mapa{left:160px!important;right:12px;top:10px;min-height:0;padding:0;background:transparent;border:0;pointer-events:none;gap:8px}
+.controles-contextuales-mapa>.acciones-contextuales,.controles-contextuales-mapa>.consulta-contextual{pointer-events:auto}
+.controles-contextuales-mapa .separador-navegacion{display:none}
+.control-incidencia{background:white;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 2px 8px #142c3a08}
+.consulta-contextual .buscador-pedido{background:white;border-radius:8px;box-shadow:0 2px 8px #142c3a08}
+.con-navegacion>.panel-control-operacion{left:160px;top:52px!important;bottom:12px;width:340px;border:1px solid #dce5ed;border-radius:12px;box-shadow:0 8px 30px #142c3a18;z-index:30}
+.superficie-operacion .panel-trabajo-v9{top:52px!important;bottom:12px!important}
+.superficie-operacion .mapa-operativo .controles-mapa{left:160px;bottom:12px}
+.superficie-operacion .mapa-operativo .estado-mapa{left:160px}
+.panel-filtros-amigable{position:absolute;left:calc(100% + 12px);top:0;z-index:60;width:320px;max-width:calc(100vw - 175px);max-height:calc(100dvh - 115px);overflow-y:auto;padding:16px;background:#fff;border:1px solid #dce5ed;border-radius:12px;box-shadow:0 10px 35px #142c3a1a;color:#475569;font-size:12px}
+.panel-filtros-amigable header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:15px}
+.panel-filtros-amigable h2{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:650;color:#0f172a}
+.panel-filtros-amigable header p{font-size:10px;margin-top:4px;color:#94a3b8}
+.panel-filtros-amigable header>button{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px}
+.panel-filtros-amigable fieldset{margin:0 0 16px;border:0;padding:0}.panel-filtros-amigable legend{font-size:11px;font-weight:600;margin-bottom:8px;color:#475569}
+.opciones-filtro{display:flex;flex-wrap:wrap;gap:5px}.opciones-filtro button{display:flex;align-items:center;gap:5px;min-height:30px;padding:5px 8px;border:1px solid #e2e8f0;border-radius:7px;background:#fff;font-size:11px;color:#64748b}
+.opciones-filtro button[aria-pressed=true]{background:#e9f4f8;border-color:#86bfd0;color:#0e7490;font-weight:600}.opciones-filtro i{width:6px;height:6px;border-radius:50%}
+.campo-filtro{display:block;font-size:11px;font-weight:600;color:#475569;margin:12px 0}.campo-filtro select{display:block;width:100%;height:32px;min-height:32px;padding:5px 8px;margin-top:6px;border:1px solid #e2e8f0;border-radius:7px;background:#f8fafc;font-weight:400;font-size:11px}
+.filtros-avanzados,.ayuda-filtro-flota{margin:12px 0;font-size:11px;color:#64748b}.filtros-avanzados>summary,.ayuda-filtro-flota>summary{cursor:pointer;padding:6px 0;font-weight:500;color:#475569}
+.panel-filtros-amigable footer{display:flex;align-items:center;justify-content:space-between;gap:6px;padding-top:12px;margin-top:12px;border-top:1px solid #edf2f7}.panel-filtros-amigable footer button{display:flex;align-items:center;gap:5px;font-size:11px;color:#0e7490}.panel-filtros-amigable footer span{font-size:9px;color:#94a3b8}
+.umbrales-filtro{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}.umbrales-filtro input{width:100%;height:30px;border:1px solid #e2e8f0;border-radius:6px;padding:4px}.umbrales-filtro button{grid-column:1/-1;padding:6px;background:#e9f4f8;border-radius:6px;color:#0e7490}
+@media(max-width:760px){#herramientas-laterales>.herramientas-v9{left:58px;width:50px;top:6px;bottom:6px;padding:4px 2px!important;border-radius:9px}#herramientas-laterales .botones-grupo>button{height:37px;min-height:37px;font-size:8px;gap:2px}#herramientas-laterales .botones-grupo>small{font-size:7px;padding:2px 0}#herramientas-laterales .utilidades-operativas>.utilidad-boton,#herramientas-laterales .utilidades-operativas>details>summary{height:36px;min-height:36px;font-size:7px;gap:2px}.con-navegacion>.controles-contextuales-mapa,.controles-contextuales-mapa{left:116px!important;right:6px;top:6px;flex-wrap:wrap;justify-content:flex-end}.controles-contextuales-mapa>.acciones-contextuales{order:2}.control-incidencia{font-size:10px;min-height:30px}.consulta-contextual{width:auto;margin-left:auto;max-width:100%}.consulta-contextual>.buscador-pedido{width:220px;min-width:0}.panel-filtros-amigable{position:fixed;left:114px;top:92px;width:calc(100vw - 122px);max-width:none;max-height:calc(100dvh - 110px);padding:12px}.panel-filtros-amigable .opciones-filtro button{font-size:10px;padding:5px 6px}.con-navegacion>.panel-control-operacion,.superficie-operacion:has(.con-navegacion) .panel-trabajo-v9{left:114px!important;right:6px!important;top:82px!important;bottom:6px!important;width:calc(100% - 120px)!important;max-width:none!important}.superficie-operacion .mapa-operativo .controles-mapa,.superficie-operacion .mapa-operativo .estado-mapa{left:116px}#herramientas-laterales .tiempos-compactos[open]>.contexto-temporal,#herramientas-laterales .configuracion-opciones,#herramientas-laterales .utilidad-descarga+div{position:fixed;left:114px;right:6px;top:110px;bottom:auto;width:auto;max-width:none;max-height:calc(100dvh - 130px);overflow:auto}.superficie-operacion[data-panel]:not([data-panel=ninguno]) .mapa-operativo{bottom:0!important}.navegacion-escenarios{top:0;bottom:0}.controles-mapa button{min-width:30px;min-height:32px;padding:4px 7px}}
+@media(max-height:680px) and (min-width:761px){#herramientas-laterales .botones-grupo>button{height:34px;min-height:34px;font-size:8px;gap:2px}#herramientas-laterales .utilidades-operativas>.utilidad-boton,#herramientas-laterales .utilidades-operativas>details>summary{height:32px;min-height:32px;font-size:8px}}
+
+/* One grouped rail, shared by scenarios and tools. Menus float over the map. */
+.barra-lateral-unificada{position:absolute;left:0;top:0;bottom:0;width:80px;z-index:36;display:flex;flex-direction:column;background:#fffffff7;border-right:1px solid #dce5ed;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:#cbd5e1 transparent}
+#escenarios-laterales{flex-shrink:0}.barra-lateral-unificada .navegacion-escenarios{position:static;width:100%;padding:7px 5px;gap:2px;border:0;border-bottom:1px solid #e5edf2;background:transparent}
+.barra-lateral-unificada .rotulo-escenarios{font-size:8px;margin:0 0 3px}
+.barra-lateral-unificada .navegacion-escenarios>button{width:68px;min-height:48px;gap:4px;font-size:10px;padding:6px 2px}
+.barra-lateral-unificada .navegacion-escenarios>button>svg{width:18px;height:18px}
+.barra-lateral-unificada .ayuda-escenarios{display:none}
+#herramientas-laterales{position:static;pointer-events:auto;z-index:auto;flex:1}
+#herramientas-laterales>.herramientas-v9{position:static!important;width:100%;padding:4px!important;border:0;border-radius:0;box-shadow:none;background:transparent}
+#herramientas-laterales .botones-grupo>button{height:41px;min-height:41px;font-size:10px;gap:3px}
+#herramientas-laterales .botones-grupo>small{font-size:8px;padding:3px 0}
+#herramientas-laterales .botones-grupo>button>svg{width:17px;height:17px}
+#herramientas-laterales .utilidades-operativas>.utilidad-boton,#herramientas-laterales .utilidades-operativas>details>summary{height:39px;min-height:39px;font-size:9px;gap:3px}
+#herramientas-laterales .toolbar-operativa,#herramientas-laterales .navegacion-paneles{gap:4px}
+#herramientas-laterales .panel-filtros-amigable{position:fixed;left:92px;top:100px;width:310px;max-width:calc(100vw - 104px);max-height:calc(100dvh - 115px)}
+#herramientas-laterales .tiempos-compactos[open]>.contexto-temporal{position:fixed;left:92px;right:auto;top:auto;bottom:16px;width:420px;max-width:calc(100vw - 104px)}
+#herramientas-laterales .tiempos-compactos .rejilla-tiempos{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px}
+#herramientas-laterales .tiempos-compactos .rejilla-tiempos>div{padding:10px!important;gap:8px;min-height:66px}
+#herramientas-laterales .tiempos-compactos .rejilla-tiempos p{word-break:normal;overflow-wrap:normal}
+#herramientas-laterales .configuracion-opciones,#herramientas-laterales .utilidad-descarga+div{position:fixed;left:92px;right:auto;top:auto;bottom:16px;width:280px;max-width:calc(100vw - 104px);max-height:calc(100dvh - 115px);overflow:auto}
+.con-navegacion>.controles-contextuales-mapa,.controles-contextuales-mapa{left:92px!important}
+.con-navegacion>.panel-control-operacion{left:92px;top:52px!important}
+.superficie-operacion .mapa-operativo .controles-mapa,.superficie-operacion .mapa-operativo .estado-mapa{left:92px}
+@media(max-width:760px){.barra-lateral-unificada{width:60px}.barra-lateral-unificada .navegacion-escenarios{padding:5px 3px}.barra-lateral-unificada .navegacion-escenarios>button{width:52px;min-height:44px;font-size:8px}.barra-lateral-unificada .rotulo-escenarios{font-size:7px}#herramientas-laterales .botones-grupo>button{font-size:8px;height:37px;min-height:37px}#herramientas-laterales .botones-grupo>small{font-size:7px}#herramientas-laterales .utilidades-operativas>.utilidad-boton,#herramientas-laterales .utilidades-operativas>details>summary{font-size:8px;min-height:35px;height:35px}.con-navegacion>.controles-contextuales-mapa,.controles-contextuales-mapa{left:70px!important}.con-navegacion>.panel-control-operacion,.superficie-operacion:has(.con-navegacion) .panel-trabajo-v9{left:70px!important;width:calc(100% - 76px)!important}.superficie-operacion .mapa-operativo .controles-mapa,.superficie-operacion .mapa-operativo .estado-mapa{left:70px}#herramientas-laterales .panel-filtros-amigable,#herramientas-laterales .tiempos-compactos[open]>.contexto-temporal,#herramientas-laterales .configuracion-opciones,#herramientas-laterales .utilidad-descarga+div{left:70px;right:6px;max-width:none;width:auto;top:100px;bottom:auto;max-height:calc(100dvh - 115px)}#herramientas-laterales .tiempos-compactos .rejilla-tiempos{grid-template-columns:1fr!important}.panel-filtros-amigable .opciones-filtro button{min-height:34px}}
+
+.mapa-operativo{isolation:isolate}
+.selector-indicadores{display:flex;gap:4px;padding:4px;background:#f1f5f9;border-radius:8px;margin-bottom:15px}
+.selector-indicadores button{display:flex;align-items:center;justify-content:center;gap:6px;flex:1;padding:7px 10px;border-radius:6px;font-size:11px;color:#64748b}
+.selector-indicadores button[aria-pressed=true]{background:#fff;color:#0e7490;box-shadow:0 1px 4px #142c3a0d;font-weight:600}
+.indicador-resumen{border-width:1px;border-radius:10px;padding:14px;margin-bottom:12px}.indicador-resumen h3{font-size:12px;font-weight:600}.indicador-resumen>strong{display:block;font-size:28px;font-weight:600;margin-top:8px}.indicador-resumen>p{font-size:11px;margin-top:4px}.indicador-resumen details{margin-top:10px;font-size:10px;opacity:.85}.indicador-resumen summary{cursor:pointer}.indicador-resumen details p{margin-top:6px;line-height:1.5}.barra-indicador{height:5px;border-radius:5px;overflow:hidden;background:#ffffffa0;margin-top:10px}.barra-indicador span{height:100%;display:block;background:currentColor;border-radius:5px}
+.ayuda-medicion{font-size:10px;color:#64748b;margin-top:8px}.ayuda-medicion summary{cursor:pointer}.ayuda-medicion p{margin-top:5px;line-height:1.5}
+
+/* Full-screen geographic workspace. Both work views and tools live on the right. */
+.paqrap-app{position:relative;display:block!important;width:100%;height:100dvh;padding:0;background:#eef2f1}
+.paqrap-app>.superficie-operacion{position:absolute;inset:0;width:100%;height:100%;min-height:0}
+.paqrap-app>.cabecera-flotante{position:absolute;left:194px;right:94px;top:12px;min-height:0;z-index:32;display:flex;align-items:center;gap:10px;justify-content:space-between;padding:0;border:0;background:transparent;pointer-events:none}
+.cabecera-flotante>div{padding:8px 12px;background:#ffffff9c;border:1px solid #ffffffa0;border-radius:10px;backdrop-filter:blur(5px);max-width:520px;min-width:0}
+.cabecera-flotante strong{display:block;font-size:12px;font-weight:600;color:#334155;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cabecera-flotante>div>span{display:block;margin-top:3px;font-size:10px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cabecera-flotante>[role=status]{display:flex;align-items:center;gap:6px;padding:6px 9px;border-radius:20px;border:1px solid #ffffffb0;background:#ffffffd4;font-size:10px;font-weight:500;white-space:nowrap}
+.cabecera-flotante [role=status] i{width:5px;height:5px;border-radius:50%;background:currentColor}
+.estado-activo{color:#047857}.estado-error{color:#b91c1c}.estado-pausa{color:#b45309}.estado-neutro{color:#64748b}
+.barra-lateral-unificada{right:0;left:auto;width:78px;border-left:1px solid #dce5ed;border-right:0;background:#fffffff2;z-index:36;overflow-y:auto}
+.marca-paqrap{display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 3px 7px;color:#1d4ed8}.marca-paqrap svg{width:22px;height:22px}.marca-paqrap span{font-size:9px;font-weight:700;letter-spacing:-.02em;color:#334155}
+.vistas-trabajo-derecha{display:flex;flex-direction:column;align-items:stretch;gap:2px;border-bottom:1px solid #e2e8f0;padding:3px 4px 7px}
+.vistas-trabajo-derecha small{font-size:8px;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;text-align:center;margin-bottom:2px}
+.vistas-trabajo-derecha button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:40px;border-radius:7px;padding:4px 2px;color:#64748b;font-size:9px;line-height:1.2}
+.vistas-trabajo-derecha button svg{width:16px;height:16px}.vistas-trabajo-derecha button[aria-pressed=true]{background:#e9f4f8;color:#0e7490;font-weight:650}.vistas-trabajo-derecha button:hover{background:#f0f7fa}
+#herramientas-laterales .botones-grupo>button{height:36px;min-height:36px;font-size:9px;gap:2px}
+#herramientas-laterales .botones-grupo>small{font-size:7px;padding:2px 0}
+#herramientas-laterales .botones-grupo>button>svg{width:16px;height:16px}
+#herramientas-laterales .utilidades-operativas>.utilidad-boton,#herramientas-laterales .utilidades-operativas>details>summary{height:34px;min-height:34px;font-size:8px;gap:2px}
+.escenarios-flotantes{position:absolute;left:12px;top:12px;z-index:34;width:auto;pointer-events:auto}
+.escenarios-flotantes .navegacion-escenarios{position:static;display:flex;flex-direction:row;align-items:center;width:auto;height:auto;gap:3px;padding:4px;border:1px solid #ffffffa0;border-radius:11px;background:#ffffff40;backdrop-filter:blur(5px)}
+.escenarios-flotantes .rotulo-escenarios,.escenarios-flotantes .ayuda-escenarios{display:none}
+.escenarios-flotantes .navegacion-escenarios>button{width:50px;height:50px;min-height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:4px 1px;border:1px solid transparent;border-radius:7px;font-size:9px;color:#475569;background:transparent}
+.escenarios-flotantes .navegacion-escenarios>button>svg{width:17px;height:17px}.escenarios-flotantes .navegacion-escenarios>button[aria-current=page]{border-color:#5fa6bd;background:#0891b20d;color:#0e7490;font-weight:650}.escenarios-flotantes .navegacion-escenarios>button[aria-current=page]:before{display:none}
+.con-navegacion>.controles-contextuales-mapa,.controles-contextuales-mapa{left:12px!important;right:94px!important;top:80px}
+.con-navegacion>.panel-control-operacion{left:auto!important;right:94px;top:124px!important;bottom:12px;width:340px;max-width:calc(100% - 106px)}
+.superficie-operacion .panel-trabajo-v9,.superficie-operacion:has(.con-navegacion) .panel-trabajo-v9{left:auto!important;right:94px!important;top:124px!important;bottom:12px!important;max-width:calc(100% - 106px)!important}
+.superficie-operacion .mapa-operativo .controles-mapa{left:12px;bottom:12px}.superficie-operacion .mapa-operativo .estado-mapa{left:12px;bottom:62px;top:auto}
+.superficie-operacion .mapa-operativo .leyenda-mapa{right:94px!important}.superficie-operacion .aviso-plan{right:94px}
+#herramientas-laterales .panel-filtros-amigable{left:auto;right:90px;top:12px;width:310px;max-width:calc(100vw - 102px);max-height:calc(100dvh - 24px)}
+#herramientas-laterales .tiempos-compactos[open]>.contexto-temporal,#herramientas-laterales .configuracion-opciones,#herramientas-laterales .utilidad-descarga+div{left:auto;right:90px;bottom:12px;top:auto;max-width:calc(100vw - 102px);max-height:calc(100dvh - 24px)}
+#herramientas-laterales [role=status].mb-2{position:fixed;right:90px;left:auto;bottom:12px;width:260px}
+.panel-registro-pedidos{position:absolute;right:94px;left:auto;top:12px;bottom:12px;z-index:33;width:600px;max-width:calc(100% - 106px);overflow-y:auto;padding:18px;border:1px solid #dce5ed;border-radius:12px;background:#f8fafcf7;box-shadow:0 8px 30px #142c3a18}
+.panel-registro-pedidos>.mx-auto{max-width:100%}
+.aviso-dia-flotante,.aviso-conexion{position:absolute!important;left:12px;right:94px;top:122px;z-index:32;display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid #fde68a;border-radius:8px;background:#fffbebee;color:#92400e;font-size:11px}
+.marcador-unidad button{background:transparent!important;border:0!important;border-radius:4px!important;box-shadow:none!important}
+.marcador-unidad .unidad-sin-fondo{width:26px;height:26px;min-width:26px;min-height:26px;padding:2px!important;background:transparent!important}
+.marcador-unidad .unidad-sin-fondo>svg{width:19px;height:19px;filter:drop-shadow(0 1px 1px white)}
+.marcador-unidad .unidad-enfocada{outline:1px dashed #0284c7;outline-offset:2px}
+.marcador-unidad .text-slate-600{color:#475569}.marcador-unidad .text-emerald-700{color:#047857}.marcador-unidad .text-amber-700{color:#b45309}.marcador-unidad .text-red-700{color:#b91c1c}
+@media(max-width:760px){.barra-lateral-unificada{width:58px;right:0;left:auto}.marca-paqrap{padding:6px 2px 5px}.marca-paqrap svg{width:20px;height:20px}.marca-paqrap span{font-size:8px}.vistas-trabajo-derecha{padding:2px 2px 5px}.vistas-trabajo-derecha small{font-size:7px}.vistas-trabajo-derecha button{min-height:36px;font-size:8px}.vistas-trabajo-derecha button svg{width:15px;height:15px}#herramientas-laterales .botones-grupo>button{height:34px;min-height:34px;font-size:8px}#herramientas-laterales .utilidades-operativas>.utilidad-boton,#herramientas-laterales .utilidades-operativas>details>summary{height:32px;min-height:32px;font-size:7px}.escenarios-flotantes{left:6px;top:6px}.escenarios-flotantes .navegacion-escenarios{padding:3px;gap:2px;border-radius:9px}.escenarios-flotantes .navegacion-escenarios>button{width:41px;height:43px;min-height:43px;font-size:8px;gap:3px}.paqrap-app>.cabecera-flotante{left:auto;right:66px;top:12px;min-height:0}.cabecera-flotante>div{display:none}.cabecera-flotante>[role=status]{font-size:9px;padding:5px 7px}.con-navegacion>.controles-contextuales-mapa,.controles-contextuales-mapa{left:6px!important;right:66px!important;top:64px;justify-content:flex-start}.consulta-contextual{width:100%;max-width:100%;margin:0}.consulta-contextual>.buscador-pedido{width:100%;max-width:100%;min-width:0}.controles-contextuales-mapa .acciones-contextuales{order:2}.con-navegacion>.panel-control-operacion,.superficie-operacion .panel-trabajo-v9,.superficie-operacion:has(.con-navegacion) .panel-trabajo-v9{left:6px!important;right:66px!important;top:112px!important;bottom:6px!important;width:calc(100% - 72px)!important;max-width:none!important}.panel-registro-pedidos{right:66px;left:6px;top:58px;bottom:6px;width:auto;max-width:none;padding:12px}.panel-registro-pedidos .grid-cols-2{grid-template-columns:1fr}.superficie-operacion .mapa-operativo .controles-mapa,.superficie-operacion .mapa-operativo .estado-mapa{left:6px}.superficie-operacion .mapa-operativo .leyenda-mapa{right:66px!important}.superficie-operacion .aviso-plan{right:66px}.controles-mapa button{font-size:10px}.controles-mapa{gap:0!important}.controles-mapa button{padding:4px 6px;min-width:25px}#herramientas-laterales .panel-filtros-amigable,#herramientas-laterales .tiempos-compactos[open]>.contexto-temporal,#herramientas-laterales .configuracion-opciones,#herramientas-laterales .utilidad-descarga+div{left:6px;right:66px;top:58px;bottom:auto;width:auto;max-width:none;max-height:calc(100dvh - 66px)}.aviso-dia-flotante,.aviso-conexion{left:6px;right:66px;top:108px;font-size:10px}}

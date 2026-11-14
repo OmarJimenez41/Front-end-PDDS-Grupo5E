@@ -1,3 +1,4 @@
+import {serieMedida,estadisticaProgramada} from './metricasTiempo'
 import {jsPDF} from 'jspdf'
 import {autoTable} from 'jspdf-autotable'
 import {fechaReporte,numeroReporte as n,resumenReporte,resultadoSimulacion,type ReporteOperacion} from './reporteLegible'
@@ -34,7 +35,7 @@ class Documento {
 export function crearReportePdf(r:ReporteOperacion,hora:(h:number)=>string,vista?:VistaSimulacion|null,soloRutas=false){
  const s=resumenReporte(r),res=resultadoSimulacion(vista,hora),plan=r.ultimaPlanificacionEstable
  const titulo=soloRutas?'Rutas y productos':r.cierreDefinitivo?'Reporte de cierre':'Reporte de corte'
- const p=new Documento(titulo,`Escenario ${r.escenarioId} | Versión ${r.versionEstado} | ${r.cierreDefinitivo?'Cierre definitivo':'Corte de operación'}`,`${res?.tipo??'Operación logística'} | ${estadoEnEspanol(r.estado)} | ${hora(r.relojH)}`)
+ const p=new Documento(titulo,`Escenario ${r.escenarioId} | Versión ${r.versionEstado} | ${r.cierreDefinitivo?'Cierre definitivo':'Corte de operación'}`,`${res?.tipo??'Operación logística'} | ${estadoEnEspanol(vista?.simulacion.estado??r.estado)} | ${hora(r.relojH)}`)
  p.parrafo(`Generado: ${fechaReporte(r.generadoEn)}. Este documento conserva la información de la consulta; los valores no registrados se indican como "Sin registro".`)
  if(!soloRutas){
  p.seccion('01 / Resumen ejecutivo')
@@ -57,8 +58,15 @@ export function crearReportePdf(r:ReporteOperacion,hora:(h:number)=>string,vista
  if(!soloRutas){
  p.seccion('04 / Medición del motor')
  const tiempos=vista?.tiempos
- p.tabla(['Indicador','Significado','Último','Promedio','Muestras'],([['Ta','Búsqueda del algoritmo (ms reales)',tiempos?.taMs],['Sa','Intervalo entre planificaciones (h simuladas)',tiempos?.saH],['Sc','Avance del consumo (h simuladas)',tiempos?.scH]] as const).map(([k,desc,v])=>[k,desc,v?.muestras?n(v.ultimo,3):null,v?.muestras?n(v.promedio,3):null,v?.muestras??0]))
- if(tiempos)p.parrafo(`Configuración: Sa ${tiempos.saConfiguradaH} h; Sc máximo ${tiempos.scConfiguradoH} h. Ta mide la búsqueda y no la duración total de la simulación.`)
+ const cadencia=tiempos?.programada
+ if(cadencia){
+  const filas=[['Ta','Planificador completo (ms reales)',cadencia.taMs],['Sa','Entre solicitudes aceptadas (ms reales)',cadencia.saMs],['Sc','Bloque de datos leído (h simuladas)',cadencia.scH]] as const
+  p.tabla(['Indicador','Significado','Último','Promedio','Muestras'],filas.map(([k,desc,serie])=>{const v=estadisticaProgramada(serie);return [k,desc,v?n(v.ultimo,3):null,v?n(v.promedio,3):null,v?.muestras??0]}))
+  p.parrafo(`Configuración propia de la corrida: K ${cadencia.k}; Sa ${cadencia.saConfiguradoMs} ms reales; Sc nominal ${cadencia.scConfiguradoH} h simuladas = K por Sa. Extraordinarias ${cadencia.extraordinarias}; intervalos vencidos ${cadencia.atrasos}.`)
+ }else{
+  p.parrafo('Registro sin contrato de cadencia real; se muestran las mediciones históricas originales.')
+  p.tabla(['Indicador','Significado','Último','Promedio','Muestras'],([['Búsq.','Búsqueda (ms reales)',tiempos?.taMs],['Intervalo','Entre solicitudes (h simuladas)',tiempos?.saH],['Paso','Avance físico (h simuladas)',tiempos?.scH]] as const).map(([k,desc,v])=>[k,desc,serieMedida(v)?n(v.ultimo,3):null,serieMedida(v)?n(v.promedio,3):null,serieMedida(v)?v.muestras:0]))
+ }
  p.seccion('05 / Inventario del corte')
  p.parrafo('Detalle de pedidos, flota, almacenes e incidencias conservado en esta consulta.')
  // Include every scalar field provided by the API without exposing an unreadable JSON dump.

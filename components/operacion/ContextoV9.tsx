@@ -44,7 +44,7 @@ export function ContextoV9({children,mapa,unidades,conexion='cargando',recibidoE
 /** Reserva espacio para la consulta sin cubrir el objetivo del mapa. */
 export function SuperficieOperacion({children}:{children:ReactNode}){
  const ctx=useV9()
- return <div className="superficie-operacion relative min-h-0 flex-1" data-panel={ctx.panelActivo??'ninguno'}>{children}</div>
+ return <div className="superficie-operacion relative min-h-0 flex-1" data-panel={ctx.panelActivo??'ninguno'}><div id="escenarios-laterales" className="escenarios-flotantes"/><aside className="barra-lateral-unificada" aria-label="Navegación y herramientas"><div className="marca-paqrap" aria-label="PaqRap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m21 3-6.5 18-3.8-7.7L3 9.5 21 3Z"/><path d="m21 3-10.3 10.3"/></svg><span>PaqRap</span></div><div id="vistas-laterales"/><div id="herramientas-laterales"/></aside>{children}</div>
 }
 
 export function BotonHerramientasMapa(){
