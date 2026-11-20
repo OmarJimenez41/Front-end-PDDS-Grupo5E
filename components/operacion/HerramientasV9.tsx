@@ -46,8 +46,8 @@ export function HerramientasV9({sim,segReal,hora,operador,esDia}:{sim:VistaSimul
   {nombre:esDia?'Fecha de operación':'Fecha simulada',valor:sim?.fechaSimulada?.replace('T',' ')??(ctx.mapa?hora(ctx.mapa.relojH):'No disponible'),icono:CalendarClock,simulado:true},
   {nombre:esDia?'Transcurrido':'Transcurrido simulado',valor:ctx.mapa?duracionSimulada(ctx.mapa.relojH-(sim?.simulacion.inicioH??0)):'No disponible',icono:Timer,simulado:true},
   {nombre:'Ahora · Lima',valor:actual?.toLocaleString('es-PE',{timeZone:'America/Lima',hour12:false})??'Sincronizando',icono:Clock3,simulado:false},
-  {nombre:'Tiempo real',valor:duracionReal,icono:Timer,simulado:false},
- ].filter((_,indice)=>!esDia||(indice!==1&&indice!==3))
+  {nombre:'Transcurrido real',valor:duracionReal,icono:Timer,simulado:false},
+ ].filter(tiempo => !esDia || !tiempo.simulado)
  const contenido=<section className={`herramientas-v9 relative shrink-0 text-xs $herramientas-verticales`} aria-label="Tiempos y herramientas">
  <div id="contenido-barra-v9" hidden={!herramientasVisibles}>
  {mensaje&&<p role="status" className="mb-2 rounded bg-blue-50 px-3 py-2 text-blue-800">{mensaje}</p>}

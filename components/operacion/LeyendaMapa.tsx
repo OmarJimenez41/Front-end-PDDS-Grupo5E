@@ -20,7 +20,7 @@ export function LeyendaMapa({full,real,incident,averia=false,collapse,buscado}:{
    {full&&<div className="leyenda-escala"><MapPin className="size-4"/><span>Cuadrícula de <b>1 km</b></span><span>70 × 50 km</span><span>Origen (0,0), abajo a la izquierda</span></div>}
    <div className="leyenda-rejilla">
     <Bloque titulo="Almacenes" icono={<Warehouse className="size-4"/>}>
-     <div className="leyenda-ejemplo"><span className="simbolo-almacen central"><Warehouse className="size-4"/></span><div><b>Almacén central</b><small>Existencias ilimitadas · ∞</small></div></div>
+     <div className="leyenda-ejemplo"><span className="simbolo-almacen central"><Warehouse className="size-4"/></span><div><b>Almacén central</b><small>Stock ilimitado · ∞</small></div></div>
      <div className="leyenda-ejemplo"><span className="simbolo-almacen intermedio"><Warehouse className="size-4"/></span><div><b>Almacenes intermedios</b><small>El color indica el stock disponible.</small></div></div>
      <div className="leyenda-niveles"><Nivel color="#64748b" nombre="Vacío" rango="0 %"/><Nivel color="#059669" nombre="Disponible" rango={`≥ ${u.stock.verde} %`}/><Nivel color="#d97706" nombre="Stock intermedio" rango={`${u.stock.rojo} a < ${u.stock.verde} %`}/><Nivel color="#dc2626" nombre="Stock bajo" rango={`> 0 a < ${u.stock.rojo} %`}/></div>
      {real&&<p className="leyenda-nota">“Vehículos en base” indica las unidades estacionadas, sin ruta.</p>}

@@ -58,7 +58,14 @@ export function agruparPosiciones<T extends { x: number; y: number }>(unidades: 
 }
 export interface RutaInstantanea extends RutaPlan { trayectoria: Arista[] }
 export interface PlanInstantanea extends Omit<PlanDistribucion, 'rutas'> { aplicable: boolean | null; rutas: RutaInstantanea[] }
+export interface IntentoPlanificacion {
+  id: number
+  resultado: string
+  diagnostico: string | null
+  veredicto: string | null
+}
 export interface InstantaneaOperacion {
+  ultimoIntento?: IntentoPlanificacion | null
   versionContrato: number; escenarioId: number; versionEstado: number; relojH: number; aplicable: boolean
   fisico: { relojH: number; almacenes: AlmacenFisico[]; vehiculos: VehiculoInstantanea[]; servicios: ServicioFisico[] } | null
   acumulado: Acumulado | null; plan: PlanInstantanea | null; pedidos: Pedido[]; incidencias: Incidencia[]

@@ -1,4 +1,4 @@
-@import 'tailwindcss';
+@import 'tailwindcss' source('../');
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 
@@ -840,3 +840,54 @@
 .marcador-unidad .unidad-enfocada{outline:1px dashed #0284c7;outline-offset:2px}
 .marcador-unidad .text-slate-600{color:#475569}.marcador-unidad .text-emerald-700{color:#047857}.marcador-unidad .text-amber-700{color:#b45309}.marcador-unidad .text-red-700{color:#b91c1c}
 @media(max-width:760px){.barra-lateral-unificada{width:58px;right:0;left:auto}.marca-paqrap{padding:6px 2px 5px}.marca-paqrap svg{width:20px;height:20px}.marca-paqrap span{font-size:8px}.vistas-trabajo-derecha{padding:2px 2px 5px}.vistas-trabajo-derecha small{font-size:7px}.vistas-trabajo-derecha button{min-height:36px;font-size:8px}.vistas-trabajo-derecha button svg{width:15px;height:15px}#herramientas-laterales .botones-grupo>button{height:34px;min-height:34px;font-size:8px}#herramientas-laterales .utilidades-operativas>.utilidad-boton,#herramientas-laterales .utilidades-operativas>details>summary{height:32px;min-height:32px;font-size:7px}.escenarios-flotantes{left:6px;top:6px}.escenarios-flotantes .navegacion-escenarios{padding:3px;gap:2px;border-radius:9px}.escenarios-flotantes .navegacion-escenarios>button{width:41px;height:43px;min-height:43px;font-size:8px;gap:3px}.paqrap-app>.cabecera-flotante{left:auto;right:66px;top:12px;min-height:0}.cabecera-flotante>div{display:none}.cabecera-flotante>[role=status]{font-size:9px;padding:5px 7px}.con-navegacion>.controles-contextuales-mapa,.controles-contextuales-mapa{left:6px!important;right:66px!important;top:64px;justify-content:flex-start}.consulta-contextual{width:100%;max-width:100%;margin:0}.consulta-contextual>.buscador-pedido{width:100%;max-width:100%;min-width:0}.controles-contextuales-mapa .acciones-contextuales{order:2}.con-navegacion>.panel-control-operacion,.superficie-operacion .panel-trabajo-v9,.superficie-operacion:has(.con-navegacion) .panel-trabajo-v9{left:6px!important;right:66px!important;top:112px!important;bottom:6px!important;width:calc(100% - 72px)!important;max-width:none!important}.panel-registro-pedidos{right:66px;left:6px;top:58px;bottom:6px;width:auto;max-width:none;padding:12px}.panel-registro-pedidos .grid-cols-2{grid-template-columns:1fr}.superficie-operacion .mapa-operativo .controles-mapa,.superficie-operacion .mapa-operativo .estado-mapa{left:6px}.superficie-operacion .mapa-operativo .leyenda-mapa{right:66px!important}.superficie-operacion .aviso-plan{right:66px}.controles-mapa button{font-size:10px}.controles-mapa{gap:0!important}.controles-mapa button{padding:4px 6px;min-width:25px}#herramientas-laterales .panel-filtros-amigable,#herramientas-laterales .tiempos-compactos[open]>.contexto-temporal,#herramientas-laterales .configuracion-opciones,#herramientas-laterales .utilidad-descarga+div{left:6px;right:66px;top:58px;bottom:auto;width:auto;max-width:none;max-height:calc(100dvh - 66px)}.aviso-dia-flotante,.aviso-conexion{left:6px;right:66px;top:108px;font-size:10px}}
+
+.filtros-rapidos-mapa,.menu-averia-mapa,.aviso-averia-mapa {
+  position:absolute; z-index:25; padding:8px; border:1px solid #cbd5e1;
+  background:#fff; color:#1e293b; border-radius:8px; font-size:12px;
+}
+.filtros-rapidos-mapa {
+  --margen-filtros: 12px;
+  right: var(--margen-filtros);
+  bottom: 56px;
+  width: max-content;
+  max-width: calc(100% - var(--margen-filtros) - 12px);
+  max-height: calc(100% - 68px);
+  overflow: auto;
+}
+.superficie-operacion .mapa-operativo .filtros-rapidos-mapa { --margen-filtros: 94px; }
+@media (max-width: 760px) {
+  .superficie-operacion .mapa-operativo .filtros-rapidos-mapa { --margen-filtros: 66px; }
+}
+.filtros-rapidos-mapa fieldset { min-width: 0; margin-bottom: 4px; }
+.filtros-rapidos-mapa .opciones-filtro { display:flex; flex-wrap:wrap; gap:3px; }
+.filtros-rapidos-mapa button,.menu-averia-mapa button {
+  display:inline-flex; align-items:center; gap:4px; padding:3px 6px;
+  border:1px solid #cbd5e1; border-radius:4px;
+}
+.filtros-rapidos-mapa button[aria-pressed=true] { background:#dbeafe; border-color:#2563eb; }
+.filtros-rapidos-mapa i { width:8px; height:8px; border-radius:50%; }
+.menu-averia-mapa { width:210px; display:grid; gap:4px; z-index:40; }
+.aviso-averia-mapa { bottom:12px; right:12px; z-index:40; max-width:300px; }
+
+.consulta-contextual > .buscador-pedido {
+  flex: 0 1 230px;
+  width: 230px;
+  min-width: 0;
+}
+.consulta-contextual .buscador-pedido > form { height: 30px; }
+.consulta-contextual .buscador-pedido > form > input { height: 28px !important; }
+.resumen-flota-mapa {
+  position: absolute;
+  z-index: 24;
+  left: 12px;
+  bottom: 80px;
+  display: grid;
+  gap: 2px;
+  max-width: min(240px, calc(100% - 78px));
+  padding: 6px 9px;
+  color: #1e293b;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 11px;
+}
