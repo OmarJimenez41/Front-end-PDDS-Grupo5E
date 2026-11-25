@@ -42,15 +42,16 @@ export function MapaOperativo({ state, highlightOrderId, full = false, replanned
     const base=datosMapa({escenarioId:m.escenarioId,versionEstado:m.versionEstado,relojH:m.relojH,horizonteH:null,ultimoPlanId:m.plan?.id??null,fisico:m.fisico,acumulado:m.acumulado},cuadro?.plan??m.plan,m.pedidos,m.incidencias,m.aplicable)
     return {...base,vehiculos:base.vehiculos.map(v=>datosServidor.relojH===m.relojH?{...v,estado:datosServidor.vehiculos.find(q=>q.id===v.id)?.estado}:v),rastreo:datosServidor.rastreo}
   },[datosServidor,cuadro?.instantanea,cuadro?.plan])
-  const rutasPreparadas=useMemo(()=>prepararRutas(cuadro?.plan??null),[cuadro?.plan])
+  const rutasPreparadas=useMemo(()=>prepararRutas(cuadro?.plan??mapaVisual?.plan??null),[cuadro?.plan,mapaVisual?.plan])
   const datos=useMemo(()=>{
-    if(!baseVisual||!cuadro)return baseVisual
-    const rutas=rutasEnHora(rutasPreparadas,cuadro.relojH,baseVisual.planAplicable!==false)
-    return {...baseVisual,relojH:cuadro.relojH,vehiculos:baseVisual.vehiculos.map(v=>{
-      const posicion=cuadro.posiciones[v.id]
+    if(!baseVisual)return baseVisual
+    const hora=cuadro?.relojH??baseVisual.relojH
+    const rutas=rutasEnHora(rutasPreparadas,hora,baseVisual.planAplicable!==false,state==='complete'||state==='collapse')
+    return {...baseVisual,relojH:hora,vehiculos:baseVisual.vehiculos.map(v=>{
+      const posicion=cuadro?.posiciones[v.id]
       return posicion?{...v,...posicion,...(posicion.enMovimiento?{estado:'EN_RUTA' as const}:{})}:v
     }),rutas:rutas.length?rutas:baseVisual.rutas.filter(r=>r.tramoFisico)}
-  },[baseVisual,cuadro,rutasPreparadas])
+  },[baseVisual,cuadro,rutasPreparadas,state])
   const seleccionarPedido=useCallback((codigo:string)=>{ctx.setRutasConsulta([]);ctx.setRutaProducto(null);onPedido?.(codigo===buscado?null:codigo)},[ctx.setRutasConsulta,ctx.setRutaProducto,onPedido,buscado])
   const [averiaMenu, setAveriaMenu] = useState<{id:number; codigo:string; x:number; y:number} | null>(null)
   const [registrandoAveria, setRegistrandoAveria] = useState(false)
@@ -141,8 +142,7 @@ export function MapaOperativo({ state, highlightOrderId, full = false, replanned
   const almacenes=almacenesFiltrados.map(a=>({nombre:NOMBRE_ALMACEN[a.codigo]??a.codigo,x:a.x,y:a.y,central:a.central,pct:a.pct,
     enBase:datos.vehiculos.filter(v=>libre(v)&&Math.round(v.x)===a.x&&Math.round(v.y)===a.y).length}))
   const hayBloqueo = !!datos?.incidencias.some(i => i.tipo === 'BLOQUEO')
-  const filtradas = datos.vehiculos.filter(v => {
-    if(libre(v))return false
+  const unidadesFiltradas = datos.vehiculos.filter(v => {
     const unidad=ctx.unidades?.relojH===mapaVisual?.relojH?ctx.unidades?.unidades.find(u=>u.id===v.id):undefined
     if(unidad)return unidadCumple(unidad,ctx.filtros,ctx.mapa,ctx.limites)
     const ruta=(cuadro?.plan??mapaVisual?.plan)?.rutas.find(r=>r.vehiculoId===v.id&&r.horaFinH>datos.relojH)
@@ -155,7 +155,8 @@ export function MapaOperativo({ state, highlightOrderId, full = false, replanned
       pedidos:[],averia:null,recorridoKm:0}
     return unidadCumple(provisional,ctx.filtros,mapaVisual,ctx.limites)
   })
-  const visibles = new Set(filtradas.map(v=>v.id))
+  const filtradas=unidadesFiltradas.filter(v=>!libre(v))
+  const visibles = new Set(unidadesFiltradas.map(v=>v.id))
   // La selección explícita permite consultar la ruta aunque un filtro oculte su unidad.
   const rutaElegida = objetivo && !objetivo.asociaciones.some(a=>a.rutaId===ctx.rutaProducto) ? null : ctx.rutaProducto
   const rutaMarcada = (id:number,vehiculoId:number) => rutaElegida != null ? rutaElegida===id : objetivo ? objetivo.asociaciones.some(a=>a.rutaId===id) : unidadSeleccionada===vehiculoId
@@ -191,6 +192,7 @@ export function MapaOperativo({ state, highlightOrderId, full = false, replanned
     <FiltrosRapidosMapa />
     <div className="resumen-flota-mapa" aria-label="Resumen de flota">
       <strong>{enRuta} en ruta · {enServicio} en servicio · {enBase} en base</strong>
+      {(state==='complete'||state==='collapse')&&datos.rutas.length>0&&<span>Rutas y recorridos del último plan</span>}
       {programados > 0 && <span>{programados} con salida programada</span>}
       {textoIntento && <span title={[intento?.diagnostico, intento?.veredicto].filter(Boolean).join(' · ')}>{textoIntento}</span>}
     </div>
@@ -223,13 +225,13 @@ export function MapaOperativo({ state, highlightOrderId, full = false, replanned
         const atenuada = (objetivo || rutaElegida != null || unidadSeleccionada != null) && !marcada
         return <g key={ru.id}>
         <title>{ru.tramoFisico?'Arista física confirmada':`Ruta ${ru.id}${ru.pendientePlan?' · pendiente de replanificación':''}${objetivo?.asociaciones.some(a=>a.rutaId===ru.id)?` · pedido ${objetivo.codigo}`:''}`}</title>
-        {marcada&&<polyline vectorEffect="non-scaling-stroke" points={r(ru.porRecorrer??ru.puntos)} fill="none" stroke="white" strokeWidth="5" strokeLinecap="round"/>}
-        <polyline vectorEffect="non-scaling-stroke" aria-label={ru.tramoFisico?'Tramo físico confirmado':`Ruta ${ru.id}`} points={r(ru.porRecorrer??ru.puntos)} fill="none" stroke={ru.pendientePlan?'#b45309':COLOR_TIPO[ru.tipo]} strokeWidth={marcada?2.2:ru.tramoFisico?1.6:1} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={ru.pendientePlan?'10 6':undefined} opacity={atenuada ? 0.045 : marcada ? 0.65 : 0.2} />
+        {pendiente.length>1&&<polyline vectorEffect="non-scaling-stroke" points={r(ru.porRecorrer??ru.puntos)} fill="none" stroke="white" strokeWidth={marcada?6:4.5} strokeLinecap="round" opacity={atenuada?0.3:0.85}/>}
+        <polyline vectorEffect="non-scaling-stroke" aria-label={ru.tramoFisico?'Tramo físico confirmado':`Ruta ${ru.id}`} points={r(ru.porRecorrer??ru.puntos)} fill="none" stroke={ru.pendientePlan?'#b45309':COLOR_TIPO[ru.tipo]} strokeWidth={marcada?3.2:ru.tramoFisico?2.5:2.2} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={ru.pendientePlan?'10 6':undefined} opacity={atenuada ? 0.2 : marcada ? 1 : 0.75} />
         {!atenuada && pendiente.length > 1 && <polyline vectorEffect="non-scaling-stroke"
           points={r(pendiente.slice(0, 2))} fill="none" stroke={ru.pendientePlan ? '#b45309' : COLOR_TIPO[ru.tipo]}
-          strokeWidth={marcada ? 3 : 1.7} strokeDasharray={ru.pendientePlan ? '10 6' : undefined}
-          strokeLinecap="round" opacity={marcada ? 1 : 0.55} />}
-        {ru.recorrido.length > 1 && <polyline vectorEffect="non-scaling-stroke" aria-label={`Recorrido de ruta ${ru.id}`} points={r(ru.recorrido)} fill="none" stroke="#64748b" strokeWidth={marcada ? 1.8 : 1.2} strokeDasharray="4 7" opacity={marcada?0.4:0.07}/>}
+          strokeWidth={marcada ? 4 : 3} strokeDasharray={ru.pendientePlan ? '10 6' : undefined}
+          strokeLinecap="round" opacity={1} />}
+        {ru.recorrido.length > 1 && <polyline vectorEffect="non-scaling-stroke" aria-label={`Recorrido de ruta ${ru.id}`} points={r(ru.recorrido)} fill="none" stroke={COLOR_TIPO[ru.tipo]} strokeWidth={marcada ? 2.8 : 2} strokeDasharray="5 5" opacity={atenuada?0.15:marcada?0.85:0.5}/>}
       </g> })}
     </svg>
     {datos.incidencias.filter(i=>i.tipo==='BLOQUEO').flatMap(i=>extremosBloqueo(i.tramos).map(({x,y})=><span key={`aviso-bloqueo-${i.id}-${x}-${y}`} role="img" aria-label={`Extremo de bloqueo en (${x}, ${y})`} title={`${i.descripcion??'Tramo bloqueado'} · extremo (${x}, ${y})`} className="aviso-extremo-bloqueo absolute z-[2] flex size-6 items-center justify-center rounded-full border border-red-200 bg-white text-red-600 shadow-sm" style={pos(x,y,12)}><AlertTriangle className="size-4" aria-hidden="true"/></span>))}

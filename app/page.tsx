@@ -69,19 +69,21 @@ const TAB_ON = 'border-blue-600 bg-white text-blue-700'
 const TAB_OFF = 'border-transparent text-slate-500 hover:text-slate-800'
 
 function Nav({role,setRole}:{role:Role;setRole:(r:Role)=>void}){
+ const ctx=useV9()
  const [destino,setDestino]=useState<HTMLElement|null>(null)
  useEffect(()=>setDestino(document.getElementById('vistas-laterales')),[])
  const vistas=[['registrador','Pedidos','Registrar pedidos',FileText],['operador','Operar','Centro de operaciones',Settings2],['visualizador','Consulta','Solo consulta',MapPin]] as const
- const contenido=<nav className="vistas-trabajo-derecha" aria-label="Vistas de trabajo"><small>Vistas</small>{vistas.map(([id,texto,nombre,Icono])=><button type="button" key={id} aria-label={nombre} title={nombre} aria-pressed={role===id} onClick={()=>setRole(id)}><Icono strokeWidth={1.6} aria-hidden="true"/><span>{texto}</span></button>)}</nav>
+ const contenido=<nav className="vistas-trabajo-derecha" aria-label="Vistas de trabajo"><small>Vistas</small>{vistas.map(([id,texto,nombre,Icono])=><button type="button" key={id} aria-label={nombre} title={nombre} aria-pressed={role===id} onClick={()=>{ctx.setPanelActivo(null);setRole(id)}}><Icono strokeWidth={1.6} aria-hidden="true"/><span>{texto}</span></button>)}</nav>
  return destino?createPortal(contenido,destino):null
 }
 
 // La cola y la confirmación proceden del servidor.
-function Registrar({ escenarioId, disponible, rastreo, hora, onRegistrado, historialDesactualizado, motivoNoDisponible }: { motivoNoDisponible?:string; escenarioId: number | null; disponible: boolean; rastreo: PedidoRastreo[] | null; hora: (h: number) => string; onRegistrado: () => void; historialDesactualizado: boolean }) {
+function Registrar({ escenarioId, disponible, rastreo, hora, onRegistrado, historialDesactualizado, motivoNoDisponible, onCerrar }: { onCerrar: () => void; motivoNoDisponible?:string; escenarioId: number | null; disponible: boolean; rastreo: PedidoRastreo[] | null; hora: (h: number) => string; onRegistrado: () => void; historialDesactualizado: boolean }) {
   const vacio = { customer: '', x: '', y: '', units: '', delivery: 'Regular' as 'Regular' | 'Priorizada', hours: '36' }
   const [form, setForm] = useState(vacio)
   const [message, setMessage] = useState<{ ok: boolean; texto: string } | null>(null)
   const [enviando, setEnviando] = useState(false)
+  const [verPedidos, setVerPedidos] = useState(false)
   const real = escenarioId != null && disponible
   const [propios, setPropios] = useState<Pedido[] | null>(null)
   const [errorPropios, setErrorPropios] = useState('')
@@ -119,39 +121,46 @@ function Registrar({ escenarioId, disponible, rastreo, hora, onRegistrado, histo
   }
   const label = 'flex flex-col gap-2 text-xs font-semibold text-slate-600'
   const input = 'border border-slate-200 px-3 py-2.5 text-sm font-normal'
-  // Cola: pedidos reales del escenario (los más recientes primero) o los de ejemplo del prototipo
+  // Cola real del escenario, con los pedidos más recientes primero.
   const fuente = rastreo ?? propios?.map(q => ({ id: q.id, codigo: q.codigo, x: q.posX, y: q.posY, cantidad: q.cantidad, tipo: q.tipo, horaIngresoH: q.horaIngresoH, fechaLimiteH: q.fechaLimiteH, estado: q.estado })) ?? null
   const cola = fuente ? [...fuente].sort((a, b) => b.horaIngresoH - a.horaIngresoH) : null
-  return <div className="flex flex-col gap-5">
-    <section className="border border-slate-200 bg-white p-5 shadow-sm">
+  return <div className="registrador-contenido">
+    <section className="registro-tarjeta relative">
+      <button type="button" onClick={onCerrar} aria-label="Cerrar registro de pedidos" title="Cerrar registro de pedidos" className="absolute right-3 top-3 rounded-lg p-2 text-slate-500 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-blue-600"><X className="size-4" aria-hidden="true" /></button>
       <p className="text-[10px] font-bold uppercase tracking-widest text-blue-600">Registrador de pedidos</p>
-      <h2 className="mt-1 text-lg font-bold">Registro de operación día a día</h2>
+      <h2 className="mt-1 pr-8 text-lg font-bold">Registro de operación día a día</h2>
       <p className="mt-1 text-xs text-slate-500">La fecha y hora de ingreso se asignan automáticamente al confirmar.</p>
       {!real && <p className="mt-3 border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">{motivoNoDisponible??'No se pueden registrar pedidos hasta recuperar la conexión.'}</p>}
-      <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <label className={label}>Cliente<input value={form.customer} onChange={e => update('customer', e.target.value)} className={input} placeholder="Nombre completo" /></label>
+      <div className="registro-formulario">
+        <label className={`${label} registro-cliente`}>Cliente<input value={form.customer} onChange={e => update('customer', e.target.value)} className={input} placeholder="Nombre completo" /></label>
         <label className={label}>Coordenada X<input type="number" value={form.x} onChange={e => update('x', e.target.value)} className={input} placeholder="0–70 km" /></label>
         <label className={label}>Coordenada Y<input type="number" value={form.y} onChange={e => update('y', e.target.value)} className={input} placeholder="0–50 km" /></label>
-        <label className={label}>Unidades de producto P<input type="number" value={form.units} onChange={e => update('units', e.target.value)} className={input} /></label>
+        <label className={label}>Unidades de P<input type="number" value={form.units} onChange={e => update('units', e.target.value)} className={input} /></label>
         <label className={label}>Tipo de entrega<select value={form.delivery} onChange={e => update('delivery', e.target.value)} className="border border-slate-200 px-3 py-2.5 text-sm"><option>Regular</option><option>Priorizada</option></select></label>
         {form.delivery === 'Priorizada'
           ? <label className={label}>Plazo<select value={form.hours} onChange={e => update('hours', e.target.value)} className="border border-slate-200 px-3 py-2.5 text-sm"><option value="4">4 horas</option><option value="8">8 horas</option><option value="12">12 horas</option><option value="18">18 horas</option></select></label>
           : <div className="flex flex-col justify-end gap-2 text-xs font-semibold text-slate-600"><span>Plazo automático</span><div className="border border-slate-100 bg-slate-50 px-3 py-2.5 text-sm">36 horas</div></div>}
       </div>
-      <div className="mt-5 flex flex-wrap items-center gap-3">
+      <div className="registro-acciones flex flex-wrap items-center gap-3">
         <button onClick={submit} disabled={enviando || !real} className={`px-5 py-2.5 text-sm font-bold text-white ${enviando || !real ? 'cursor-not-allowed bg-slate-400' : 'bg-blue-700'}`}>{enviando ? 'Registrando…' : 'Registrar pedido'}</button>
+        <button type="button" aria-expanded={verPedidos} aria-controls="cola-pedidos-registro" onClick={()=>setVerPedidos(v=>!v)} className="inline-flex items-center gap-2 bg-blue-700 px-5 py-2.5 text-sm font-bold text-white"><Package className="size-4" aria-hidden="true"/>Pedidos registrados{cola ? ` (${cola.length})` : ''}<ChevronDown className={`size-4 transition-transform ${verPedidos ? 'rotate-180' : ''}`} aria-hidden="true"/></button>
         {message && <span role={message.ok ? 'status' : 'alert'} className={`text-xs font-semibold ${message.ok ? 'text-emerald-700' : 'text-red-700'}`}>{message.texto}</span>}
       </div>
     </section>
-    <section className="border border-slate-200 bg-white p-5 shadow-sm">
+    <section id="cola-pedidos-registro" hidden={!verPedidos} className="registro-tarjeta registro-cola">
       <div className="flex items-center justify-between"><div><p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Pedidos registrados</p><h2 className="mt-1 text-lg font-bold">Cola de pedidos {cola ? `(${cola.length})` : ''}</h2></div><Package className="size-5 text-slate-400" /></div>
-      <div className="mt-4 max-h-[480px] overflow-auto">
+      <div className="registro-cola-contenido">
         {historialDesactualizado && rastreo && <p role="status" className="mb-2 text-xs text-amber-800">Último historial conocido; no se pudo actualizar.</p>}
         {errorPropios && !rastreo && <p role="status" className="mb-2 text-xs text-amber-800">{propios ? 'Últimos pedidos conocidos; actualización fallida.' : 'Historial no disponible.'} {errorPropios}</p>}
-        {cola
-          ? <table className="w-full min-w-[900px] text-left text-xs"><thead className="sticky top-0 border-y border-slate-200 bg-white text-[10px] uppercase tracking-wider text-slate-400"><tr>{['Código', 'Destino', 'Unidades', 'Entrega', 'Ingreso', 'Fecha/hora límite', 'Estado'].map(h => <th key={h} className="px-3 py-3">{h}</th>)}</tr></thead>
-              <tbody>{cola.map(o => <tr key={o.id} className="border-b border-slate-100"><td className="px-3 py-3 font-bold">{o.codigo}</td><td className="px-3 py-3">({o.x}, {o.y}) km</td><td className="px-3 py-3">{o.cantidad}</td><td className="px-3 py-3">{o.tipo === 'PRIORIZADO' ? 'Priorizada' : 'Regular'} · {Math.round(o.fechaLimiteH - o.horaIngresoH)} h</td><td className="px-3 py-3 text-slate-500">{hora(o.horaIngresoH)}</td><td className="px-3 py-3 text-slate-500">{hora(o.fechaLimiteH)}</td><td className="px-3 py-3">{ETIQUETA_ESTADO[o.estado]}</td></tr>)}</tbody></table>
-          : <p className="text-xs text-slate-500">{real ? 'Cargando pedidos…' : 'Pedidos no disponibles.'}</p>}
+        {cola == null
+          ? <p className="registro-cola-vacia">{real ? 'Cargando pedidos…' : 'Pedidos no disponibles.'}</p>
+          : cola.length === 0
+            ? <p className="registro-cola-vacia">Todavía no hay pedidos. Los nuevos registros aparecerán aquí.</p>
+            : <ol className="registro-pedidos" aria-label="Pedidos registrados">{cola.map(o => <li key={o.id} className="registro-pedido">
+                <div className="registro-pedido-cabecera"><strong>{o.codigo}</strong><span className={`registro-estado registro-estado-${o.estado.toLowerCase()}`}>{ETIQUETA_ESTADO[o.estado] ?? o.estado}</span></div>
+                <p className="registro-pedido-resumen">Destino ({o.x}, {o.y}) km <span>·</span> {o.cantidad} unidades <span>·</span> {o.tipo === 'PRIORIZADO' ? 'Priorizada' : 'Regular'} · {Math.round(o.fechaLimiteH - o.horaIngresoH)} h</p>
+                <dl className="registro-pedido-fechas"><div><dt>Ingreso</dt><dd>{hora(o.horaIngresoH)}</dd></div><div><dt>Fecha límite</dt><dd>{hora(o.fechaLimiteH)}</dd></div></dl>
+              </li>)}</ol>}
       </div>
     </section>
   </div>
@@ -707,7 +716,7 @@ export default function Home() {
     <HerramientasV9 esDia={esDia} sim={sim ?? vistaSeleccionada ?? null} segReal={sim ? segReal : vistaSeleccionada?.simulacion.segundosEjecutados ?? (borradorSimulacion?0:dia?.segundosEjecutados ?? 0)} hora={hora} operador={role === 'operador'} />
     {role!=='registrador'&&mapaError&&<div role="status" className="aviso-conexion"><AlertTriangle className="size-4 shrink-0"/><span>La conexión se está recuperando. Se muestra el último estado recibido.</span><button onClick={refrescar}>Reintentar</button><span className="sr-only">{mapaError}</span></div>}
     <SuperficieOperacion>
-          {role==='registrador'&&<div className="panel-registro-pedidos" role="region" aria-label="Registro de pedidos"><div className="mx-auto max-w-[1500px]"><Registrar motivoNoDisponible={consultandoUrl&&vistaSeleccionada?.simulacion.estado!=='EJECUTANDO'?'Este escenario no está en ejecución. Vuelve al día a día para registrar nuevos pedidos.':undefined} escenarioId={diaRegistro} disponible={!errorDia && (!consultandoUrl || vistaSeleccionada?.simulacion.estado === 'EJECUTANDO')} rastreo={diaRegistro != null && diaRegistro === escenarioMapa && historialActual ? mapa?.rastreo ?? null : null} hora={horaRegistro} onRegistrado={refrescar} historialDesactualizado={estadoHistorial === 'desactualizado'} /></div></div>}
+          {role==='registrador'&&<div className="panel-registro-pedidos" role="region" aria-label="Registro de pedidos"><div className="mx-auto max-w-[1500px]"><Registrar onCerrar={()=>setRole('visualizador')} motivoNoDisponible={consultandoUrl&&vistaSeleccionada?.simulacion.estado!=='EJECUTANDO'?'Este escenario no está en ejecución. Vuelve al día a día para registrar nuevos pedidos.':undefined} escenarioId={diaRegistro} disponible={!errorDia && (!consultandoUrl || vistaSeleccionada?.simulacion.estado === 'EJECUTANDO')} rastreo={diaRegistro != null && diaRegistro === escenarioMapa && historialActual ? mapa?.rastreo ?? null : null} hora={horaRegistro} onRegistrado={refrescar} historialDesactualizado={estadoHistorial === 'desactualizado'} /></div></div>}
           {role!=='operador'&&<NavegacionEscenarios actual={escenarioVisible} bloqueada={inicioPendiente||simAlive} onSeleccion={s=>{setRole('operador');elegirEscenario(s)}}/>}
 
           {role === 'operador' && <Operator inicioPendiente={inicioPendiente} setInicioPendiente={setInicioPendiente} mapaActual={operacion.conexion === 'actual'} generaciones={generaciones} invalidarSim={invalidarSim} recuperarDia={()=>{if(escenarioUrl!=null)salirDeConsulta();recuperarDia()}} onUmbrales={setUmbrales} mapa={mapa} escenarioId={mapaVivo ? escenarioMapa : null} onCambio={refrescar} hora={hora} segReal={(sim??vistaSeleccionada)?.simulacion.segundosEjecutados??segReal} scenario={escenarioVisible} setScenario={elegirEscenario} state={consultandoUrl||scenario==='day'?effectiveState:state} setState={setState} replanned={replanned} setReplanned={setReplanned} sim={sim??vistaSeleccionada} setSim={setSim} unidadSeleccionada={unidadSeleccionada} onUnidad={seleccionarUnidad} buscado={buscado} setBuscado={setBuscado} warehouse={almacenSeleccionado} setWarehouse={seleccionarAlmacen} historialCompleto={historialActual !== null && estadoHistorial === 'actual'} />}

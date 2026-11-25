@@ -57,6 +57,14 @@ export function agruparPosiciones<T extends { x: number; y: number }>(unidades: 
   return grupos
 }
 export interface RutaInstantanea extends RutaPlan { trayectoria: Arista[] }
+/** La API liviana omite el trazado duplicado; reconstruye los extremos y sus tiempos certificados. */
+export function trazadoDeRuta(ruta: RutaPlan & {trayectoria?: Arista[]}): PuntoTrazado[] {
+  if (ruta.trazado.length > 1) return ruta.trazado
+  return (ruta.trayectoria ?? []).flatMap((a,i) => [
+    {secuencia:i*2,x:a.x1,y:a.y1,instanteH:a.salidaH},
+    {secuencia:i*2+1,x:a.x2,y:a.y2,instanteH:a.llegadaH},
+  ])
+}
 export interface PlanInstantanea extends Omit<PlanDistribucion, 'rutas'> { aplicable: boolean | null; rutas: RutaInstantanea[] }
 export interface IntentoPlanificacion {
   id: number
@@ -246,7 +254,7 @@ function posicionEn(trazado: PuntoTrazado[], t: number): { x: number; y: number;
 export function datosMapa(estado: EstadoOperacion, plan: PlanDistribucion | null, pedidos: Pedido[], incidencias: Incidencia[] = [],aplicable=true): MapaDatos {
   const reloj = estado.fisico?.relojH ?? estado.relojH
   const fisicos = estado.fisico?.vehiculos ?? []
-  const rutasActivas = (plan?.rutas ?? []).filter(r => r.trazado.length > 1 && r.horaFinH >= reloj)
+  const rutasActivas = (plan?.rutas ?? []).map(r=>({...r,trazado:trazadoDeRuta(r)})).filter(r => r.trazado.length > 1 && r.horaFinH >= reloj)
   // Viaje en curso de cada vehículo: una unidad puede tener varios viajes seguidos en el plan
   const enCurso = new globalThis.Map<number, RutaPlan>()
   for (const r of rutasActivas) if (r.horaInicioH <= reloj && (enCurso.get(r.vehiculoId)?.horaInicioH ?? -Infinity) < r.horaInicioH) enCurso.set(r.vehiculoId, r)

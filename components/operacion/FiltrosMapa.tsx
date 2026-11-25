@@ -18,8 +18,11 @@ export function FiltrosMapa({onCerrar,editable}:{onCerrar:()=>void;editable:bool
 
 export function FiltrosRapidosMapa(){
  const ctx = useV9(), f = ctx.filtros
+ const [visible,setVisible]=useState(true)
  const cambiar = (k: keyof FiltrosV9, v: string) => ctx.setFiltros({...f, [k]: v})
+ if(!visible)return <button type="button" className="filtros-rapidos-mapa filtros-rapidos-abrir" aria-label="Mostrar filtros rápidos" aria-expanded={false} onClick={()=>setVisible(true)}><SlidersHorizontal className="size-4"/>Filtros rápidos</button>
  return <section className="filtros-rapidos-mapa" aria-label="Filtros rápidos del mapa">
+ <div className="filtros-rapidos-cabecera"><strong>Filtros rápidos</strong><button type="button" aria-label="Cerrar filtros rápidos" title="Cerrar filtros rápidos" onClick={()=>setVisible(false)}><X className="size-4" aria-hidden="true"/></button></div>
  <fieldset><legend>Vehículos</legend><div className="opciones-filtro">{([['todos','Todos',null],['AUTO','Autos',Car],['MOTO','Motos',Motorbike],['BICICLETA','Bicicletas',Bike]] as const).map(([v,t,Icono])=><button key={v} type="button" aria-pressed={f.tipo===v} onClick={()=>cambiar('tipo',v)}>{Icono&&<Icono className="size-4"/>}{t}</button>)}</div></fieldset>
  <fieldset><legend>Ocupación</legend><div className="opciones-filtro">{luces.map(([v,t,color])=><button key={v} type="button" title={v==='verde'?`Menos de ${ctx.limites.verde}%`:v==='ámbar'?`${ctx.limites.verde}% a menos de ${ctx.limites.rojo}%`:v==='rojo'?`Desde ${ctx.limites.rojo}%`:t} aria-pressed={f.luzUnidad===v} onClick={()=>cambiar('luzUnidad',v)}>{color&&<i style={{background:color}}/>}{t}</button>)}</div></fieldset>
  <button type="button" onClick={() => ctx.setFiltros({...filtrosIniciales})}><RotateCcw className="size-3.5"/>Restablecer filtros</button>
