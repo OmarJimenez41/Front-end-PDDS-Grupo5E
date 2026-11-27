@@ -1,9 +1,8 @@
 'use client'
-import {useState} from 'react'
-import {Car,Motorbike,Bike,SlidersHorizontal,X,RotateCcw} from 'lucide-react'
+import {useRef,useState} from 'react'
+import {Car,Motorbike,Bike,SlidersHorizontal,X,RotateCcw,GripVertical} from 'lucide-react'
 import {useV9} from './ContextoV9'
 import {filtrosIniciales,type FiltrosV9} from '../../lib/operacion/mejorasV9'
-const luces=[['todos','Todas',''],['vacío','Sin carga','#64748b'],['verde','Baja','#059669'],['ámbar','Media','#d97706'],['rojo','Alta','#dc2626']] as const
 export function FiltrosMapa({onCerrar,editable}:{onCerrar:()=>void;editable:boolean}){
  const ctx=useV9(),f=ctx.filtros,[verde,setVerde]=useState(String(ctx.limites.verde)),[rojo,setRojo]=useState(String(ctx.limites.rojo)),[error,setError]=useState('')
  const cambiar=(k:keyof FiltrosV9,v:string)=>ctx.setFiltros({...f,[k]:v})
@@ -16,15 +15,21 @@ export function FiltrosMapa({onCerrar,editable}:{onCerrar:()=>void;editable:bool
  <footer><button type="button" onClick={()=>ctx.setFiltros({...filtrosIniciales})}><RotateCcw className="size-3.5"/>Restablecer</button><span>Se aplica al mapa y las listas</span></footer></section>
 }
 
+/** Filtros rápidos como botonera compacta y flotante (JP 26/11): solo íconos y colores, se arrastra desde el asa. */
 export function FiltrosRapidosMapa(){
  const ctx = useV9(), f = ctx.filtros
- const [visible,setVisible]=useState(true)
+ const [visible,setVisible]=useState(true),[pos,setPos]=useState({x:0,y:0}),arrastre=useRef<{x:number;y:number;px:number;py:number}|null>(null)
  const cambiar = (k: keyof FiltrosV9, v: string) => ctx.setFiltros({...f, [k]: v})
- if(!visible)return <button type="button" className="filtros-rapidos-mapa filtros-rapidos-abrir" aria-label="Mostrar filtros rápidos" aria-expanded={false} onClick={()=>setVisible(true)}><SlidersHorizontal className="size-4"/>Filtros rápidos</button>
- return <section className="filtros-rapidos-mapa" aria-label="Filtros rápidos del mapa">
- <div className="filtros-rapidos-cabecera"><strong>Filtros rápidos</strong><button type="button" aria-label="Cerrar filtros rápidos" title="Cerrar filtros rápidos" onClick={()=>setVisible(false)}><X className="size-4" aria-hidden="true"/></button></div>
- <fieldset><legend>Vehículos</legend><div className="opciones-filtro">{([['todos','Todos',null],['AUTO','Autos',Car],['MOTO','Motos',Motorbike],['BICICLETA','Bicicletas',Bike]] as const).map(([v,t,Icono])=><button key={v} type="button" aria-pressed={f.tipo===v} onClick={()=>cambiar('tipo',v)}>{Icono&&<Icono className="size-4"/>}{t}</button>)}</div></fieldset>
- <fieldset><legend>Ocupación</legend><div className="opciones-filtro">{luces.map(([v,t,color])=><button key={v} type="button" title={v==='verde'?`Menos de ${ctx.limites.verde}%`:v==='ámbar'?`${ctx.limites.verde}% a menos de ${ctx.limites.rojo}%`:v==='rojo'?`Desde ${ctx.limites.rojo}%`:t} aria-pressed={f.luzUnidad===v} onClick={()=>cambiar('luzUnidad',v)}>{color&&<i style={{background:color}}/>}{t}</button>)}</div></fieldset>
- <button type="button" onClick={() => ctx.setFiltros({...filtrosIniciales})}><RotateCcw className="size-3.5"/>Restablecer filtros</button>
+ if(!visible)return <button type="button" className="filtros-rapidos-mapa filtros-rapidos-abrir" aria-label="Mostrar filtros rápidos" title="Mostrar filtros rápidos" aria-expanded={false} onClick={()=>setVisible(true)}><SlidersHorizontal className="size-4"/></button>
+ const tipos=[['todos','Todos los vehículos',null],['AUTO','Autos',Car],['MOTO','Motos',Motorbike],['BICICLETA','Bicicletas',Bike]] as const
+ const ocupacion=[['todos','Todas las ocupaciones','∗',''],['vacío','Sin carga (0 %)','V','#64748b'],['verde',`Baja: menos de ${ctx.limites.verde} %`,'B','#059669'],['ámbar',`Media: ${ctx.limites.verde} % a menos de ${ctx.limites.rojo} %`,'M','#d97706'],['rojo',`Alta: desde ${ctx.limites.rojo} %`,'A','#dc2626']] as const
+ return <section className="filtros-rapidos-mapa filtros-botonera" aria-label="Filtros rápidos del mapa" style={{transform:`translate(${pos.x}px,${pos.y}px)`}} onPointerDown={e=>e.stopPropagation()}>
+ <button type="button" className="filtros-asa" aria-label="Mover filtros" title="Arrastra para mover" onPointerDown={e=>{e.currentTarget.setPointerCapture(e.pointerId);arrastre.current={x:e.clientX,y:e.clientY,px:pos.x,py:pos.y}}} onPointerMove={e=>{const a=arrastre.current;if(a)setPos({x:a.px+e.clientX-a.x,y:a.py+e.clientY-a.y})}} onPointerUp={()=>{arrastre.current=null}}><GripVertical className="size-3.5"/></button>
+ <div className="opciones-filtro" role="group" aria-label="Tipo de vehículo">{tipos.map(([v,t,Icono])=><button key={v} type="button" title={t} aria-label={t} aria-pressed={f.tipo===v} onClick={()=>cambiar('tipo',v)}>{Icono?<Icono className="size-4"/>:'Todo'}</button>)}</div>
+ <span className="filtros-separador" aria-hidden="true"/>
+ <div className="opciones-filtro" role="group" aria-label="Ocupación">{ocupacion.map(([v,t,letra,color])=><button key={v} type="button" title={t} aria-label={t} aria-pressed={f.luzUnidad===v} onClick={()=>cambiar('luzUnidad',v)} style={color?{color,borderColor:color}:undefined}><b>{letra}</b></button>)}</div>
+ <span className="filtros-separador" aria-hidden="true"/>
+ <button type="button" title="Restablecer filtros" aria-label="Restablecer filtros" onClick={() => ctx.setFiltros({...filtrosIniciales})}><RotateCcw className="size-3.5"/></button>
+ <button type="button" title="Ocultar filtros rápidos" aria-label="Cerrar filtros rápidos" onClick={()=>setVisible(false)}><X className="size-3.5"/></button>
  </section>
 }

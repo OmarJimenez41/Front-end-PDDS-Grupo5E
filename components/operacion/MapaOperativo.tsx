@@ -11,6 +11,7 @@ import { useCuadroMovimiento } from '@/lib/operacion/useMovimiento'
 import { unidadesEnPunto, estacionadaEnAlmacen } from '@/lib/operacion/agrupacionMapa'
 import { prepararRutas, rutasEnHora } from '@/lib/operacion/escenaMapa'
 import { LeyendaMapa as Leyenda } from './LeyendaMapa'
+import { IndicadoresMini } from './PanelIndicadoresV9'
 import { extremosBloqueo } from '@/lib/operacion/extremosBloqueo'
 import { ampliarCamara, centrarCamara, limitarCamara, llenarCamara } from '@/lib/operacion/camara'
 
@@ -78,12 +79,8 @@ export function MapaOperativo({ state, highlightOrderId, full = false, replanned
     encuadreLleno.current=false
     setCamara(c => ampliarCamara(c, factor, punto ? {x:punto.x-(rect.width-dimensiones.ancho)/2,y:punto.y-(rect.height-dimensiones.alto)/2} : { x: dimensiones.ancho / 2, y: dimensiones.alto / 2 }, dimensiones.ancho,dimensiones.alto))
   }
-  useEffect(() => {
-    const v = datos?.vehiculos.find(v => v.id === unidadSeleccionada), rect = area.current?.getBoundingClientRect()
-    if (!v || !rect) return
-    ultimoObjetivo.current = { x: v.x, y: v.y }
-    setCamara(c => centrarCamara(c, v, dimensiones.ancho,dimensiones.alto))
-  }, [unidadSeleccionada])
+  // Seleccionar una unidad solo resalta su ruta: el mapa conserva su encuadre y tamaño
+  // (pedido de la JP, 26/11: cambiar el mapa distrae al usuario).
   useEffect(() => {
     const a = datos?.almacenes.find(a => (NOMBRE_ALMACEN[a.codigo] ?? a.codigo) === almacenMarcado), rect = area.current?.getBoundingClientRect()
     if (!a || !rect) return
@@ -91,18 +88,6 @@ export function MapaOperativo({ state, highlightOrderId, full = false, replanned
     setCamara(c => centrarCamara(c, a, dimensiones.ancho,dimensiones.alto))
   }, [almacenMarcado])
   useEffect(() => { if (unidadSeleccionada == null && almacenMarcado == null) ultimoObjetivo.current = null }, [unidadSeleccionada, almacenMarcado])
-  // Seguimiento: mientras la unidad esté seleccionada (resaltada en celeste), la cámara la acompaña
-  // a medida que avanza. Arrastrar el mapa a mano suelta el seguimiento hasta volver a seleccionarla;
-  // deseleccionarla deja el mapa quieto donde está.
-  const seguir = useRef(true)
-  useEffect(() => { seguir.current = true }, [unidadSeleccionada])
-  const seguida = unidadSeleccionada == null ? undefined : datos?.vehiculos.find(v => v.id === unidadSeleccionada)
-  useEffect(() => {
-    const rect = area.current?.getBoundingClientRect()
-    if (!seguida || !seguir.current || !rect || arrastre.current) return
-    ultimoObjetivo.current = { x: seguida.x, y: seguida.y }
-    setCamara(c => centrarCamara(c, seguida, dimensiones.ancho,dimensiones.alto))
-  }, [seguida?.x, seguida?.y])
   useEffect(() => {
     const nodo = area.current
     if (!nodo) return
@@ -187,11 +172,12 @@ export function MapaOperativo({ state, highlightOrderId, full = false, replanned
   const fondoLuz=(luz:string)=>luz==='vacío'?'text-slate-600':luz==='verde'?'text-emerald-700':luz==='ámbar'?'text-amber-700':luz==='rojo'?'text-red-700':'text-slate-500'
   return <div ref={area} className={`mapa-operativo ${full ? 'absolute inset-0' : 'relative min-h-[480px]'} overflow-hidden bg-[#eef2f1]`} onWheel={e => { e.preventDefault(); const rect = e.currentTarget.getBoundingClientRect(); zoom(Math.exp(-Math.max(-100,Math.min(100,e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?300:1)))*.002), { x: e.clientX - rect.left, y: e.clientY - rect.top }) }}
     onPointerDown={e => { if (e.button !== 0 || (e.target as HTMLElement).closest('button, [data-map-marker]')) return; encuadreLleno.current=false; arrastre.current = { x: e.clientX, y: e.clientY, origenX: camara.x, origenY: camara.y }; e.currentTarget.setPointerCapture(e.pointerId) }}
-    onPointerMove={e => { const a = arrastre.current; if (!a) return; if (Math.abs(e.clientX - a.x) + Math.abs(e.clientY - a.y) > 4) seguir.current = false; const rect = e.currentTarget.getBoundingClientRect(); setCamara(c => limitarCamara(a.origenX + e.clientX - a.x, a.origenY + e.clientY - a.y, c.escala, dimensiones.ancho,dimensiones.alto)) }}
+    onPointerMove={e => { const a = arrastre.current; if (!a) return; const rect = e.currentTarget.getBoundingClientRect(); setCamara(c => limitarCamara(a.origenX + e.clientX - a.x, a.origenY + e.clientY - a.y, c.escala, dimensiones.ancho,dimensiones.alto)) }}
     onPointerUp={() => { arrastre.current = null }} onPointerCancel={() => { arrastre.current = null }}>
     <FiltrosRapidosMapa />
     <div className="resumen-flota-mapa" aria-label="Resumen de flota">
       <strong>{enRuta} en ruta · {enServicio} en servicio · {enBase} en base</strong>
+      <IndicadoresMini />
       {(state==='complete'||state==='collapse')&&datos.rutas.length>0&&<span>Rutas y recorridos del último plan</span>}
       {programados > 0 && <span>{programados} con salida programada</span>}
       {textoIntento && <span title={[intento?.diagnostico, intento?.veredicto].filter(Boolean).join(' · ')}>{textoIntento}</span>}
@@ -219,19 +205,19 @@ export function MapaOperativo({ state, highlightOrderId, full = false, replanned
     <svg className="absolute inset-0 size-full" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
       <Cuadricula />
       {/* Tramos bloqueados vigentes (incidencias del back-end) */}
-      {datos?.incidencias.filter(i => i.tipo === 'BLOQUEO').flatMap(i => i.tramos.map((t, k) => { const [a, b] = [p(t.x1, t.y1).split(','), p(t.x2, t.y2).split(',')]; return <line key={`${i.id}-${k}`} x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke="#be185d" strokeWidth="3.5" strokeDasharray="6 3" vectorEffect="non-scaling-stroke" strokeLinecap="round"><title>{i.descripcion ?? 'Tramo bloqueado'}</title></line> }))}
+      {datos?.incidencias.filter(i => i.tipo === 'BLOQUEO').flatMap(i => i.tramos.map((t, k) => { const [a, b] = [p(t.x1, t.y1).split(','), p(t.x2, t.y2).split(',')]; return <line key={`${i.id}-${k}`} x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke="#be185d" strokeWidth="2.2" strokeDasharray="5 3" vectorEffect="non-scaling-stroke" strokeLinecap="round"><title>{i.descripcion ?? 'Tramo bloqueado'}</title></line> }))}
       {rutasDibujadas.map(ru => { const marcada = ctx.rutasConsulta.some(r=>r.id===ru.id) || rutaMarcada(ru.id,ru.vehiculoId)
         const pendiente = ru.porRecorrer ?? ru.puntos
         const atenuada = (objetivo || rutaElegida != null || unidadSeleccionada != null) && !marcada
         return <g key={ru.id}>
         <title>{ru.tramoFisico?'Arista física confirmada':`Ruta ${ru.id}${ru.pendientePlan?' · pendiente de replanificación':''}${objetivo?.asociaciones.some(a=>a.rutaId===ru.id)?` · pedido ${objetivo.codigo}`:''}`}</title>
-        {pendiente.length>1&&<polyline vectorEffect="non-scaling-stroke" points={r(ru.porRecorrer??ru.puntos)} fill="none" stroke="white" strokeWidth={marcada?6:4.5} strokeLinecap="round" opacity={atenuada?0.3:0.85}/>}
-        <polyline vectorEffect="non-scaling-stroke" aria-label={ru.tramoFisico?'Tramo físico confirmado':`Ruta ${ru.id}`} points={r(ru.porRecorrer??ru.puntos)} fill="none" stroke={ru.pendientePlan?'#b45309':COLOR_TIPO[ru.tipo]} strokeWidth={marcada?3.2:ru.tramoFisico?2.5:2.2} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={ru.pendientePlan?'10 6':undefined} opacity={atenuada ? 0.2 : marcada ? 1 : 0.75} />
+        {pendiente.length>1&&<polyline vectorEffect="non-scaling-stroke" points={r(ru.porRecorrer??ru.puntos)} fill="none" stroke="white" strokeWidth={marcada?3.5:2.5} strokeLinecap="round" opacity={atenuada?0.3:0.85}/>}
+        <polyline vectorEffect="non-scaling-stroke" aria-label={ru.tramoFisico?'Tramo físico confirmado':`Ruta ${ru.id}`} points={r(ru.porRecorrer??ru.puntos)} fill="none" stroke={ru.pendientePlan?'#b45309':COLOR_TIPO[ru.tipo]} strokeWidth={marcada?2:ru.tramoFisico?1.4:1.2} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={ru.pendientePlan?'6 4':undefined} opacity={atenuada ? 0.2 : marcada ? 1 : 0.75} />
         {!atenuada && pendiente.length > 1 && <polyline vectorEffect="non-scaling-stroke"
           points={r(pendiente.slice(0, 2))} fill="none" stroke={ru.pendientePlan ? '#b45309' : COLOR_TIPO[ru.tipo]}
-          strokeWidth={marcada ? 4 : 3} strokeDasharray={ru.pendientePlan ? '10 6' : undefined}
+          strokeWidth={marcada ? 2.4 : 1.6} strokeDasharray={ru.pendientePlan ? '6 4' : undefined}
           strokeLinecap="round" opacity={1} />}
-        {ru.recorrido.length > 1 && <polyline vectorEffect="non-scaling-stroke" aria-label={`Recorrido de ruta ${ru.id}`} points={r(ru.recorrido)} fill="none" stroke={COLOR_TIPO[ru.tipo]} strokeWidth={marcada ? 2.8 : 2} strokeDasharray="5 5" opacity={atenuada?0.15:marcada?0.85:0.5}/>}
+        {ru.recorrido.length > 1 && <polyline vectorEffect="non-scaling-stroke" aria-label={`Recorrido de ruta ${ru.id}`} points={r(ru.recorrido)} fill="none" stroke={COLOR_TIPO[ru.tipo]} strokeWidth={marcada ? 1.6 : 1} strokeDasharray="4 4" opacity={atenuada?0.15:marcada?0.85:0.5}/>}
       </g> })}
     </svg>
     {datos.incidencias.filter(i=>i.tipo==='BLOQUEO').flatMap(i=>extremosBloqueo(i.tramos).map(({x,y})=><span key={`aviso-bloqueo-${i.id}-${x}-${y}`} role="img" aria-label={`Extremo de bloqueo en (${x}, ${y})`} title={`${i.descripcion??'Tramo bloqueado'} · extremo (${x}, ${y})`} className="aviso-extremo-bloqueo absolute z-[2] flex size-6 items-center justify-center rounded-full border border-red-200 bg-white text-red-600 shadow-sm" style={pos(x,y,12)}><AlertTriangle className="size-4" aria-hidden="true"/></span>))}
