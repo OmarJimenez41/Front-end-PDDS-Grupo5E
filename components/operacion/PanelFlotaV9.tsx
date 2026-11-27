@@ -5,6 +5,12 @@ import type {Incidencia,UnidadOperativa} from '../../lib/api/operacion'
 import type {EstadoDetalle} from '../../lib/operacion/lectura'
 import {luzOcupacion,claseLuz,estadoEnEspanol,metricasUnidad,unidadCumple,type MetricasUnidad} from '../../lib/operacion/mejorasV9'
 import {useV9} from './ContextoV9'
+import {Car,Motorbike,Bike,Warehouse,Navigation,PackageCheck,Clock3,Wrench,Ban,Flag,type LucideIcon} from 'lucide-react'
+import type {EstadoUnidad,TipoVehiculo} from '../../lib/api/operacion'
+
+// Íconos para que cada unidad ocupe una sola línea (JP 26/11): tipo, estado y distancia sin texto largo.
+const ICONO_TIPO:Record<TipoVehiculo,LucideIcon>={AUTO:Car,MOTO:Motorbike,BICICLETA:Bike}
+const ICONO_ESTADO:Record<EstadoUnidad,LucideIcon>={EN_BASE:Warehouse,PROGRAMADA:Clock3,EN_RUTA:Navigation,EN_SERVICIO:PackageCheck,AVERIADA:Wrench,EN_MANTENIMIENTO:Wrench,NO_DISPONIBLE:Ban}
 
 type Extendida=UnidadOperativa&Partial<MetricasUnidad>
 type Orden='ocupacionPct'|'salidaH'|'llegadaH'|'llegadaDestinoH'|'destinoKm'|'origenKm'|'recorridoKm'|'destinoMin'|'origenMin'
@@ -39,22 +45,27 @@ export function PanelFlota({unidades,detalle,hora,seleccion,onSeleccion,incidenc
    {detalle!=='actual'&&<p role="status" className="flota-aviso">Detalle {detalle==='pendiente'?'pendiente de sincronización':'desactualizado'}. Los filtros conservan el último dato recibido.</p>}
    {unidades&&!flotaOficial(unidades)&&<p className="flota-aviso">Composición distinta de la flota oficial 37 (10 autos, 15 motos, 12 bicicletas).</p>}
    {ctx.mapa?.plan&&!ctx.mapa.aplicable&&<p className="flota-aviso">Ruta en actualización. Posición y carga confirmadas.</p>}
-   <details className="ayuda-filtro-flota"><summary>Colores de ocupación</summary><p>Sin carga: 0 %. Baja: menos de {ctx.limites.verde} %. Media: menos de {ctx.limites.rojo} %. Alta: desde {ctx.limites.rojo} %.</p></details>
    <div className="flota-filtros-principales">
-    <label>Buscar unidad<input aria-label="Buscar unidad por código" placeholder="Ej. TA01" value={busqueda} onChange={e=>setBusqueda(e.target.value)}/></label>
-    <label>Destino inmediato<select aria-label="Filtrar UT por destino" value={ctx.filtros.destino??'todos'} onChange={e=>ctx.setFiltros({...ctx.filtros,destino:e.target.value})}><option value="todos">Todos</option>{[...new Set((unidades??[]).flatMap(u=>u.destino?[u.destino.codigo]:[]))].sort().map(c=><option key={c}>{c}</option>)}</select></label>
+    <label>Unidad<input aria-label="Buscar unidad por código" placeholder="TA01" value={busqueda} onChange={e=>setBusqueda(e.target.value)}/></label>
+    <label>Destino<select aria-label="Filtrar UT por destino" value={ctx.filtros.destino??'todos'} onChange={e=>ctx.setFiltros({...ctx.filtros,destino:e.target.value})}><option value="todos">Todos</option>{[...new Set((unidades??[]).flatMap(u=>u.destino?[u.destino.codigo]:[]))].sort().map(c=><option key={c}>{c}</option>)}</select></label>
    </div>
    <details className="filtros-avanzados"><summary>Filtrar por distancia o tiempo</summary>
     <div className="flota-rango"><label className="flota-magnitud">Magnitud<select value={medida} onChange={e=>setMedida(e.target.value as typeof medida)}>{opciones.filter(x=>['destinoKm','origenKm','destinoMin','origenMin'].includes(x[0])).map(x=><option key={x[0]} value={x[0]}>{x[1]}</option>)}</select></label><label>Mínimo<input type="number" min="0" value={minimo} onChange={e=>setMinimo(e.target.value)}/></label><label>Máximo<input type="number" min="0" value={maximo} onChange={e=>setMaximo(e.target.value)}/></label></div>
     {(Number(minimo)<0||Number(maximo)<0||(minimo!==''&&maximo!==''&&Number(minimo)>Number(maximo)))&&<p role="alert" className="text-red-700">Rango inválido: usa valores positivos y mínimo ≤ máximo.</p>}
    </details>
-   <div className="flota-orden"><label>Ordenar por<select value={campo} onChange={e=>setCampo(e.target.value as Orden)}>{opciones.map(([v,t])=><option key={v} value={v}>{t}</option>)}</select></label><button className="flota-boton" onClick={()=>setAscendente(!ascendente)}>{ascendente?'Ascendente ↑':'Descendente ↓'}</button></div>
-   <div className="flota-resultados"><p role="status">{lista.length} de {unidades?.length??0} unidades</p><button className="flota-limpiar" onClick={limpiarBusqueda}>Limpiar búsqueda</button></div>
+   <div className="flota-orden"><label>Ordenar<select value={campo} onChange={e=>setCampo(e.target.value as Orden)}>{opciones.map(([v,t])=><option key={v} value={v}>{t}</option>)}</select></label><span className="orden-flechas"><button type="button" aria-label="Orden ascendente" title="Ascendente" aria-pressed={ascendente} onClick={()=>setAscendente(true)}>↑</button><button type="button" aria-label="Orden descendente" title="Descendente" aria-pressed={!ascendente} onClick={()=>setAscendente(false)}>↓</button></span></div>
+   <div className="flota-resultados"><p role="status">{lista.length} de {unidades?.length??0} unidades</p><button className="flota-limpiar" onClick={limpiarBusqueda}>Limpiar</button></div>
    {rangoActivo&&<p className="flota-nota">{unidades?.filter(u=>metricasUnidad(u,ctx.mapa)[medida]==null).length??0} unidades sin esta métrica; quedan fuera del rango.</p>}
-   <details className="flota-listado-desplegable"><summary>Ver unidades ({lista.length})</summary><ul className="flota-lista" aria-label="Unidades de la flota">{lista.map(u=><li key={u.id}><button aria-pressed={u.id===seleccion} className="flota-unidad" onClick={()=>onSeleccion(u.id)}>
-    <span className="flota-unidad-datos"><span className="flota-unidad-titulo"><strong>{u.codigo}</strong><span>{estadoEnEspanol(u.tipo)} · {estadoEnEspanol(u.estado)}</span></span><span className="flota-unidad-metrica">{u[medida]==null?(u.estado==='EN_BASE'&&!u.destino?'Sin destino asignado':`${opciones.find(o=>o[0]===medida)?.[1]}: no disponible`):`${opciones.find(o=>o[0]===medida)?.[1]}: ${cantidadConUnidad(u[medida],medida.endsWith('Min')?'min':'km')}`}</span>{campo!=='ocupacionPct'&&campo!==medida&&<span className="flota-unidad-orden">{opciones.find(o=>o[0]===campo)?.[1]}: {valorOrden(u)}</span>}</span>
-    <span className={`flota-ocupacion ${claseLuz[luzOcupacion(u.ocupacionPct,u.capacidad,ctx.limites)]}`}><strong>{cantidadConUnidad(u.ocupacionPct,'%')}</strong><span>ocupación</span></span>
-   </button></li>)}</ul>
+   <details open className="flota-listado-desplegable"><summary>Ver unidades ({lista.length})</summary><ul className="flota-lista" aria-label="Unidades de la flota">{lista.map(u=><li key={u.id}><button aria-pressed={u.id===seleccion} className="flota-unidad" onClick={()=>onSeleccion(u.id)}>
+    {(()=>{const T=ICONO_TIPO[u.tipo]??Car,E=ICONO_ESTADO[u.estado]??Ban,v=u[medida],unidad=medida.endsWith('Min')?'min':'km',nombreMedida=opciones.find(o=>o[0]===medida)?.[1]??'';return <span className="flota-fila">
+     <T className="flota-icono" aria-label={estadoEnEspanol(u.tipo)}><title>{estadoEnEspanol(u.tipo)}</title></T>
+     <strong>{u.codigo}</strong>
+     <E className="flota-icono flota-estado" aria-label={estadoEnEspanol(u.estado)}><title>{estadoEnEspanol(u.estado)}</title></E>
+     <span className="flota-distancia" title={nombreMedida}><Flag className="flota-icono" aria-hidden="true"/>{v==null?'—':`${numero.format(v)} ${unidad}`}</span>
+     {campo!=='ocupacionPct'&&campo!==medida&&<span className="flota-unidad-orden" title={opciones.find(o=>o[0]===campo)?.[1]}>{valorOrden(u)}</span>}
+     <b className={`flota-pct ${claseLuz[luzOcupacion(u.ocupacionPct,u.capacidad,ctx.limites)]}`} title="Ocupación">{u.ocupacionPct==null?'—':`${numero.format(u.ocupacionPct)} %`}</b>
+    </span>})()}
+</button></li>)}</ul>
    {lista.length===0&&<p className="flota-vacia">{unidades?'No hay unidades que coincidan con los filtros.':'Cargando flota…'}</p>}</details>
    {ficha&&<section className="flota-ficha" aria-label={`Detalle de ${ficha.codigo}`}>
     <h3>{ficha.codigo} · {estadoEnEspanol(ficha.tipo)}</h3><p>{estadoEnEspanol(ficha.estado)} · {numero.format(ficha.carga)} / {numero.format(ficha.capacidad)} unidades</p>
